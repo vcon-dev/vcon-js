@@ -34,6 +34,7 @@
         "typescript": "^5.3.3"
     },
     "dependencies": {
+        "jose": "^6.0.10",
         "jsonwebtoken": "^9.0.2",
         "uuid": "^9.0.1"
     }
