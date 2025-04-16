@@ -1,4 +1,4 @@
-export type Encoding = 'base64' | 'base64url' | 'none';
+export type Encoding = 'base64' | 'base64url' | 'json' | 'none';
 
 export interface Attachment {
   type: string;
@@ -72,6 +72,27 @@ export interface Analysis {
   extra?: Record<string, any>;
 }
 
+/**
+ * Interface for JWS signature components according to the vCon specification.
+ * Used in the signatures array of a signed vCon.
+ */
+export interface Signature {
+  /**
+   * The protected header in base64url encoding
+   */
+  protected: string;
+  
+  /**
+   * The JWS signature in base64url encoding
+   */
+  signature: string;
+  
+  /**
+   * Optional unprotected header
+   */
+  header?: Record<string, any>;
+}
+
 export interface VconData {
   uuid?: string;
   vcon?: string;
@@ -87,8 +108,24 @@ export interface VconData {
   attachments?: Attachment[];
   analysis?: Analysis[];
   tags?: Record<string, any>;
+  
+  /**
+   * Original signature property - kept for backward compatibility
+   */
   signature?: {
     alg: string;
     signature: string;
   };
-} 
+  
+  /**
+   * JWS signature array according to the JWS JSON Serialization
+   * Added when a vCon is signed using the sign() method
+   */
+  signatures?: Signature[];
+  
+  /**
+   * Base64url encoded payload containing the original vCon data
+   * Added when a vCon is signed using the sign() method
+   */
+  payload?: string;
+}
