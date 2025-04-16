@@ -3,11 +3,10 @@ import { VconData, Attachment, Party, Dialog, Analysis, Encoding } from './types
 import { Attachment as AttachmentClass } from './attachment';
 import { Party as PartyClass } from './party';
 import { Dialog as DialogClass } from './dialog';
-import * as jose from 'jose';
 import * as crypto from 'crypto';
 
 export class Vcon {
-  private data: VconData;
+  data: VconData;
 
   constructor(vconDict: Partial<VconData> = {}) {
     this.data = {
@@ -132,6 +131,20 @@ export class Vcon {
   }
 
   /**
+   * Helper method to encode a string in base64url format
+   * 
+   * @param input - The string to encode
+   * @returns The base64url encoded string
+   */
+  private base64UrlEncode(input: string): string {
+    return Buffer.from(input)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  /**
    * Sign the vCon using JWS (JSON Web Signature).
    * 
    * This method signs the vCon using the provided private key, adding the signature
@@ -153,45 +166,51 @@ export class Vcon {
    * vcon.sign(privateKey);
    * ```
    */
-  async sign(privateKey: string | crypto.KeyObject): Promise<void> {
+  sign(privateKeyInput: string | crypto.KeyObject): void {
     try {
       console.log("Signing vCon with JWS");
       
       // Convert the vCon to a JSON string for signing
       const payload = this.toJson();
       
-      // Create the protected header
-      const protectedHeader = { alg: 'RS256', typ: 'JWS' };
+      // Convert private key to PEM format if it's a KeyObject
+      const privateKey = typeof privateKeyInput === 'string' 
+        ? privateKeyInput 
+        : privateKeyInput.export({ type: 'pkcs8', format: 'pem' }).toString();
       
-      // Convert private key to key object if it's a string
-      let keyObject: crypto.KeyObject;
-      if (typeof privateKey === 'string') {
-        keyObject = crypto.createPrivateKey(privateKey);
-      } else {
-        keyObject = privateKey;
-      }
+      // Create a header for JWS
+      const header = {
+        alg: 'RS256',
+        typ: 'JWS'
+      };
       
-      // Create a JWS signer
-      const privateJwk = await jose.exportJWK(keyObject);
+      // Create base64url encoded versions
+      const headerBase64 = this.base64UrlEncode(JSON.stringify(header));
+      const payloadBase64 = this.base64UrlEncode(payload);
       
-      // Sign the payload
-      const jws = await new jose.CompactSign(
-        new TextEncoder().encode(payload)
-      )
-        .setProtectedHeader(protectedHeader)
-        .sign(keyObject);
+      // Create the signature input
+      const signatureInput = `${headerBase64}.${payloadBase64}`;
       
-      // Split the compact JWS into its components
-      const [header, payloadB64, signature] = jws.split('.');
+      // Create signature
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(signatureInput);
+      const signature = signer.sign(privateKey, 'base64');
+      
+      // Convert to base64url format
+      const signatureBase64Url = signature
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
       
       // Update the vCon with the signature information
-      this.data.signatures = [{ protected: header, signature }];
-      this.data.payload = payloadB64;
+      this.data.signatures = [{ protected: headerBase64, signature: signatureBase64Url }];
+      this.data.payload = payloadBase64;
       
       // Remove the original vCon properties that are now in the payload
       // to match the signed vCon format
+      const keysToKeep = ['signatures', 'payload'];
       Object.keys(this.data).forEach(key => {
-        if (!['signatures', 'payload'].includes(key)) {
+        if (!keysToKeep.includes(key)) {
           delete this.data[key as keyof VconData];
         }
       });
@@ -222,12 +241,12 @@ export class Vcon {
    *   privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
    * });
    * const vcon = Vcon.buildNew();
-   * await vcon.sign(privateKey);
-   * const isValid = await vcon.verify(publicKey);
+   * vcon.sign(privateKey);
+   * const isValid = vcon.verify(publicKey);
    * console.log(isValid);  // Prints true
    * ```
    */
-  async verify(publicKey: string | crypto.KeyObject): Promise<boolean> {
+  verify(publicKeyInput: string | crypto.KeyObject): boolean {
     if (!this.data.signatures || !this.data.payload) {
       console.error("Cannot verify: vCon is not signed");
       throw new Error("vCon is not signed");
@@ -236,23 +255,30 @@ export class Vcon {
     try {
       console.log("Verifying vCon signature");
       
-      // Reconstruct the compact JWS
+      // Extract components
       const { protected: protectedHeader, signature } = this.data.signatures[0];
-      const compactJws = `${protectedHeader}.${this.data.payload}.${signature}`;
+      const payload = this.data.payload;
       
-      // Convert public key to key object if it's a string
-      let keyObject: crypto.KeyObject;
-      if (typeof publicKey === 'string') {
-        keyObject = crypto.createPublicKey(publicKey);
-      } else {
-        keyObject = publicKey;
-      }
+      // Convert public key to appropriate format
+      const publicKey = typeof publicKeyInput === 'string' 
+        ? publicKeyInput 
+        : publicKeyInput.export({ type: 'spki', format: 'pem' }).toString();
+      
+      // Create signature input
+      const signatureInput = `${protectedHeader}.${payload}`;
+      
+      // Convert base64url signature to base64
+      const signatureBase64 = signature
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
       
       // Verify the signature
-      await jose.compactVerify(compactJws, keyObject);
+      const verifier = crypto.createVerify('RSA-SHA256');
+      verifier.update(signatureInput);
+      const isValid = verifier.verify(publicKey, signatureBase64, 'base64');
       
-      console.log("Successfully verified vCon signature");
-      return true;
+      console.log("Signature verification result:", isValid);
+      return isValid;
     } catch (error) {
       console.warn("Invalid signature detected:", error);
       return false;
@@ -271,8 +297,8 @@ export class Vcon {
    * ```typescript
    * const [privateKey, publicKey] = Vcon.generateKeyPair();
    * const vcon = Vcon.buildNew();
-   * await vcon.sign(privateKey);
-   * const isValid = await vcon.verify(publicKey);
+   * vcon.sign(privateKey);
+   * const isValid = vcon.verify(publicKey);
    * console.log(isValid);  // Prints true
    * ```
    */

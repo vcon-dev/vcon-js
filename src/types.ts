@@ -72,10 +72,24 @@ export interface Analysis {
   extra?: Record<string, any>;
 }
 
-// New interface for JWS signature components
+/**
+ * Interface for JWS signature components according to the vCon specification.
+ * Used in the signatures array of a signed vCon.
+ */
 export interface Signature {
+  /**
+   * The protected header in base64url encoding
+   */
   protected: string;
+  
+  /**
+   * The JWS signature in base64url encoding
+   */
   signature: string;
+  
+  /**
+   * Optional unprotected header
+   */
   header?: Record<string, any>;
 }
 
@@ -95,13 +109,23 @@ export interface VconData {
   analysis?: Analysis[];
   tags?: Record<string, any>;
   
-  // Original signature property
+  /**
+   * Original signature property - kept for backward compatibility
+   */
   signature?: {
     alg: string;
     signature: string;
   };
   
-  // New JWS signature properties
+  /**
+   * JWS signature array according to the JWS JSON Serialization
+   * Added when a vCon is signed using the sign() method
+   */
   signatures?: Signature[];
+  
+  /**
+   * Base64url encoded payload containing the original vCon data
+   * Added when a vCon is signed using the sign() method
+   */
   payload?: string;
 }
