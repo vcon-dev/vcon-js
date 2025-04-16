@@ -1,4 +1,4 @@
-export type Encoding = 'base64' | 'base64url' | 'none';
+export type Encoding = 'base64' | 'base64url' | 'json' | 'none';
 
 export interface Attachment {
   type: string;
@@ -72,6 +72,13 @@ export interface Analysis {
   extra?: Record<string, any>;
 }
 
+// New interface for JWS signature components
+export interface Signature {
+  protected: string;
+  signature: string;
+  header?: Record<string, any>;
+}
+
 export interface VconData {
   uuid?: string;
   vcon?: string;
@@ -87,8 +94,14 @@ export interface VconData {
   attachments?: Attachment[];
   analysis?: Analysis[];
   tags?: Record<string, any>;
+  
+  // Original signature property
   signature?: {
     alg: string;
     signature: string;
   };
-} 
+  
+  // New JWS signature properties
+  signatures?: Signature[];
+  payload?: string;
+}
