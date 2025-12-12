@@ -1,6 +1,6 @@
 {
     "name": "vcon-js",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "JavaScript library for creating and managing vCons (Virtual Conversations)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
