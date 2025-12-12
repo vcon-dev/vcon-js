@@ -14,13 +14,14 @@ import {
 import { Attachment as AttachmentClass } from './attachment';
 import { Party as PartyClass } from './party';
 import { Dialog as DialogClass } from './dialog';
+import * as crypto from 'crypto';
 
 /**
  * Main Vcon class for creating and managing vCon conversation containers.
  * Compliant with IETF draft-ietf-vcon-vcon-core-01
  */
 export class Vcon {
-  private data: VconData;
+  data: VconData;
 
   constructor(vconDict: Partial<VconData> = {}) {
     this.data = {
@@ -135,6 +136,10 @@ export class Vcon {
     extra?: Record<string, any>;
   }): void {
     const analysis: Analysis = { ...params };
+
+    if (params.extra) {
+      analysis.extra = params.extra;
+    }
 
     if (!this.data.analysis) {
       this.data.analysis = [];

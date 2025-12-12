@@ -1,8 +1,4 @@
-/**
- * vCon Type Definitions
- * Compliant with IETF draft-ietf-vcon-vcon-core-01
- * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-01
- */
+export type Encoding = 'base64' | 'base64url' | 'json' | 'none';
 
 /** Valid encoding types for inline content */
 export type Encoding = 'base64url' | 'json' | 'none';
@@ -254,23 +250,27 @@ export interface Group {
   meta?: Record<string, any>;
 }
 
-/** Redacted object reference */
-export interface Redacted {
-  /** UUID of original unredacted vCon */
-  uuid?: string;
-  /** Additional redaction metadata */
-  [key: string]: any;
+/**
+ * Interface for JWS signature components according to the vCon specification.
+ * Used in the signatures array of a signed vCon.
+ */
+export interface Signature {
+  /**
+   * The protected header in base64url encoding
+   */
+  protected: string;
+  
+  /**
+   * The JWS signature in base64url encoding
+   */
+  signature: string;
+  
+  /**
+   * Optional unprotected header
+   */
+  header?: Record<string, any>;
 }
 
-/** Amended object reference */
-export interface Amended {
-  /** UUID of amended vCon */
-  uuid?: string;
-  /** Additional amendment metadata */
-  [key: string]: any;
-}
-
-/** Top-level vCon data structure */
 export interface VconData {
   /** Globally unique identifier (preferably UUID v8) */
   uuid?: string;
@@ -304,14 +304,24 @@ export interface VconData {
   meta?: Record<string, any>;
   /** Tags for classification */
   tags?: Record<string, any>;
-  /** Digital signature */
+  
+  /**
+   * Original signature property - kept for backward compatibility
+   */
   signature?: {
     alg: string;
     signature: string;
   };
-  /** Allow additional properties for extensions */
-  [key: string]: any;
+  
+  /**
+   * JWS signature array according to the JWS JSON Serialization
+   * Added when a vCon is signed using the sign() method
+   */
+  signatures?: Signature[];
+  
+  /**
+   * Base64url encoded payload containing the original vCon data
+   * Added when a vCon is signed using the sign() method
+   */
+  payload?: string;
 }
-
-/** vCon version constant for vcon-core-01 */
-export const VCON_VERSION = '0.0.1';

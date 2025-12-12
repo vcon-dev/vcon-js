@@ -24,6 +24,7 @@
     "license": "MIT",
     "devDependencies": {
         "@types/jest": "^29.5.12",
+        "@types/jsonwebtoken": "^9.0.9",
         "@types/node": "^20.11.24",
         "@types/uuid": "^10.0.0",
         "@typescript-eslint/eslint-plugin": "^7.1.0",
@@ -36,6 +37,7 @@
         "typescript": "^5.3.3"
     },
     "dependencies": {
+        "jose": "^6.0.10",
         "jsonwebtoken": "^9.0.2",
         "uuid": "^9.0.1"
     }
