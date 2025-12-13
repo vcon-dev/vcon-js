@@ -1,6 +1,6 @@
 {
     "name": "vcon-js",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "JavaScript library for creating and managing vCons (Virtual Conversations)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -9,8 +9,10 @@
         "test": "jest",
         "lint": "eslint . --ext .ts",
         "format": "prettier --write \"src/**/*.ts\"",
-        "example": "ts-node examples/simple.ts",
-        "example:av": "ts-node examples/audio-video.ts"
+        "example:chat": "ts-node examples/01-text-chat.ts",
+        "example:call": "ts-node examples/02-call-recording.ts",
+        "example:conference": "ts-node examples/03-video-conference.ts",
+        "examples": "ts-node examples/01-text-chat.ts && ts-node examples/02-call-recording.ts && ts-node examples/03-video-conference.ts"
     },
     "keywords": [
         "vcon",

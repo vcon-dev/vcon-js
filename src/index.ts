@@ -9,20 +9,41 @@ import {
   Dialog as DialogType,
   Analysis,
   Encoding,
-  CivicAddress
+  CivicAddress,
+  PartyHistory as PartyHistoryType,
+  Group,
+  Redacted,
+  Amended,
+  DialogType as DialogTypeEnum,
+  DialogDisposition,
+  SessionId,
+  ContentHash,
+  VCON_VERSION
 } from './types';
 
 export {
+  // Classes
   Vcon,
   Attachment,
   Party,
   PartyHistory,
   Dialog,
+  // Types
   VconData,
   AttachmentType,
   PartyType,
   DialogType,
   Analysis,
   Encoding,
-  CivicAddress
-}; 
+  CivicAddress,
+  PartyHistoryType,
+  Group,
+  Redacted,
+  Amended,
+  DialogTypeEnum,
+  DialogDisposition,
+  SessionId,
+  ContentHash,
+  // Constants
+  VCON_VERSION
+};

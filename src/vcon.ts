@@ -1,18 +1,34 @@
 import { v4 as uuidv4 } from 'uuid';
-import { VconData, Attachment, Party, Dialog, Analysis, Encoding } from './types';
+import {
+  VconData,
+  Attachment,
+  Party,
+  Dialog,
+  Analysis,
+  Encoding,
+  Group,
+  Redacted,
+  Amended,
+  VCON_VERSION
+} from './types';
 import { Attachment as AttachmentClass } from './attachment';
 import { Party as PartyClass } from './party';
 import { Dialog as DialogClass } from './dialog';
 import * as crypto from 'crypto';
 
+/**
+ * Main Vcon class for creating and managing vCon conversation containers.
+ * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ */
 export class Vcon {
   data: VconData;
 
   constructor(vconDict: Partial<VconData> = {}) {
     this.data = {
       uuid: vconDict.uuid || uuidv4(),
-      created_at: vconDict.created_at || new Date(),
-      updated_at: vconDict.updated_at || new Date(),
+      vcon: vconDict.vcon || VCON_VERSION,
+      created_at: vconDict.created_at || new Date().toISOString(),
+      updated_at: vconDict.updated_at,
       parties: vconDict.parties || [],
       dialog: vconDict.dialog || [],
       attachments: vconDict.attachments || [],
@@ -22,6 +38,9 @@ export class Vcon {
     };
   }
 
+  /**
+   * Create a Vcon from a JSON string
+   */
   static buildFromJson(jsonString: string): Vcon {
     try {
       const data = JSON.parse(jsonString);
@@ -32,9 +51,14 @@ export class Vcon {
     }
   }
 
+  /**
+   * Create a new empty Vcon with default values
+   */
   static buildNew(): Vcon {
     return new Vcon();
   }
+
+  // Tag methods
 
   get tags(): Record<string, any> | undefined {
     return this.data.tags;
@@ -49,22 +73,49 @@ export class Vcon {
       this.data.tags = {};
     }
     this.data.tags[tagName] = tagValue;
-    this.data.updated_at = new Date();
+    this.data.updated_at = new Date().toISOString();
   }
+
+  // Attachment methods
 
   findAttachmentByType(type: string): Attachment | undefined {
     return this.data.attachments?.find(attachment => attachment.type === type);
   }
 
-  addAttachment(type: string, body: any, encoding: Encoding = 'none'): AttachmentClass {
-    const attachment = new AttachmentClass(type, body, encoding);
+  findAttachmentByPurpose(purpose: string): Attachment | undefined {
+    return this.data.attachments?.find(attachment => attachment.purpose === purpose);
+  }
+
+  addAttachment(params: {
+    type?: string;
+    purpose?: string;
+    body?: any;
+    encoding?: Encoding;
+    url?: string;
+    content_hash?: string;
+    mediatype?: string;
+    filename?: string;
+    start?: Date | string;
+    party?: number;
+    dialog?: number | number[];
+  }): AttachmentClass {
+    const attachment = new AttachmentClass(params);
     if (!this.data.attachments) {
       this.data.attachments = [];
     }
     this.data.attachments.push(attachment.toDict());
-    this.data.updated_at = new Date();
+    this.data.updated_at = new Date().toISOString();
     return attachment;
   }
+
+  /**
+   * @deprecated Use addAttachment with params object instead
+   */
+  addAttachmentLegacy(type: string, body: any, encoding: Encoding = 'none'): AttachmentClass {
+    return this.addAttachment({ type, body, encoding });
+  }
+
+  // Analysis methods
 
   findAnalysisByType(type: string): Analysis | undefined {
     return this.data.analysis?.find(analysis => analysis.type === type);
@@ -73,18 +124,18 @@ export class Vcon {
   addAnalysis(params: {
     type: string;
     dialog: number | number[];
-    vendor: string;
-    body: Record<string, any> | any[] | string;
+    vendor?: string;
+    product?: string;
+    schema?: string;
+    body?: Record<string, any> | any[] | string;
     encoding?: Encoding;
+    url?: string;
+    content_hash?: string;
+    mediatype?: string;
+    filename?: string;
     extra?: Record<string, any>;
   }): void {
-    const analysis: Analysis = {
-      type: params.type,
-      dialog: params.dialog,
-      vendor: params.vendor,
-      body: params.body,
-      encoding: params.encoding || 'none'
-    };
+    const analysis: Analysis = { ...params };
 
     if (params.extra) {
       analysis.extra = params.extra;
@@ -94,20 +145,25 @@ export class Vcon {
       this.data.analysis = [];
     }
     this.data.analysis.push(analysis);
-    this.data.updated_at = new Date();
+    this.data.updated_at = new Date().toISOString();
   }
+
+  // Party methods
 
   addParty(party: PartyClass): void {
     if (!this.data.parties) {
       this.data.parties = [];
     }
     this.data.parties.push(party.toDict());
-    this.data.updated_at = new Date();
+    this.data.updated_at = new Date().toISOString();
   }
 
   findPartyIndex(by: string, val: string): number | undefined {
-    return this.data.parties?.findIndex(party => party[by] === val);
+    const index = this.data.parties?.findIndex(party => party[by] === val);
+    return index !== undefined && index >= 0 ? index : undefined;
   }
+
+  // Dialog methods
 
   findDialog(by: string, val: any): DialogClass | undefined {
     const dialog = this.data.dialog?.find(d => d[by] === val);
@@ -119,201 +175,78 @@ export class Vcon {
       this.data.dialog = [];
     }
     this.data.dialog.push(dialog.toDict());
-    this.data.updated_at = new Date();
+    this.data.updated_at = new Date().toISOString();
   }
 
+  // Serialization methods
+
+  /**
+   * Convert vCon to JSON string
+   */
   toJson(): string {
     return JSON.stringify(this.toDict());
   }
 
+  /**
+   * Convert vCon to plain object
+   */
   toDict(): VconData {
     return { ...this.data };
   }
 
-  /**
-   * Helper method to encode a string in base64url format
-   * 
-   * @param input - The string to encode
-   * @returns The base64url encoded string
-   */
-  private base64UrlEncode(input: string): string {
-    return Buffer.from(input)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
+  // Extension methods (vcon-core-01)
 
   /**
-   * Sign the vCon using JWS (JSON Web Signature).
-   * 
-   * This method signs the vCon using the provided private key, adding the signature
-   * information to the vCon. The signature can later be verified using the
-   * corresponding public key.
-   * 
-   * @param privateKey - The RSA private key in PEM format or as a crypto.KeyObject
-   * @throws Error - If there is an error during the signing process
-   * 
-   * @example
-   * ```typescript
-   * import * as crypto from 'crypto';
-   * const { privateKey } = crypto.generateKeyPairSync('rsa', {
-   *   modulusLength: 2048,
-   *   publicKeyEncoding: { type: 'spki', format: 'pem' },
-   *   privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-   * });
-   * const vcon = Vcon.buildNew();
-   * vcon.sign(privateKey);
-   * ```
+   * Add an extension name to the extensions array
    */
-  sign(privateKeyInput: string | crypto.KeyObject): void {
-    try {
-      console.log("Signing vCon with JWS");
-      
-      // Convert the vCon to a JSON string for signing
-      const payload = this.toJson();
-      
-      // Convert private key to PEM format if it's a KeyObject
-      const privateKey = typeof privateKeyInput === 'string' 
-        ? privateKeyInput 
-        : privateKeyInput.export({ type: 'pkcs8', format: 'pem' }).toString();
-      
-      // Create a header for JWS
-      const header = {
-        alg: 'RS256',
-        typ: 'JWS'
-      };
-      
-      // Create base64url encoded versions
-      const headerBase64 = this.base64UrlEncode(JSON.stringify(header));
-      const payloadBase64 = this.base64UrlEncode(payload);
-      
-      // Create the signature input
-      const signatureInput = `${headerBase64}.${payloadBase64}`;
-      
-      // Create signature
-      const signer = crypto.createSign('RSA-SHA256');
-      signer.update(signatureInput);
-      const signature = signer.sign(privateKey, 'base64');
-      
-      // Convert to base64url format
-      const signatureBase64Url = signature
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-      
-      // Update the vCon with the signature information
-      this.data.signatures = [{ protected: headerBase64, signature: signatureBase64Url }];
-      this.data.payload = payloadBase64;
-      
-      // Remove the original vCon properties that are now in the payload
-      // to match the signed vCon format
-      const keysToKeep = ['signatures', 'payload'];
-      Object.keys(this.data).forEach(key => {
-        if (!keysToKeep.includes(key)) {
-          delete this.data[key as keyof VconData];
-        }
-      });
-      
-      console.log("Successfully signed vCon");
-    } catch (error) {
-      console.error("Failed to sign vCon:", error);
-      throw error;
+  addExtension(name: string): void {
+    if (!this.data.extensions) {
+      this.data.extensions = [];
+    }
+    if (!this.data.extensions.includes(name)) {
+      this.data.extensions.push(name);
+      this.data.updated_at = new Date().toISOString();
     }
   }
 
   /**
-   * Verify the JWS signature of the vCon.
-   * 
-   * This method verifies the vCon's signature using the provided public key.
-   * The vCon must have been previously signed using the corresponding private key.
-   * 
-   * @param publicKey - The RSA public key in PEM format or as a crypto.KeyObject
-   * @returns true if the signature is valid, false otherwise
-   * @throws Error - If the vCon is not signed
-   * 
-   * @example
-   * ```typescript
-   * import * as crypto from 'crypto';
-   * const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-   *   modulusLength: 2048,
-   *   publicKeyEncoding: { type: 'spki', format: 'pem' },
-   *   privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-   * });
-   * const vcon = Vcon.buildNew();
-   * vcon.sign(privateKey);
-   * const isValid = vcon.verify(publicKey);
-   * console.log(isValid);  // Prints true
-   * ```
+   * Add a critical extension name
    */
-  verify(publicKeyInput: string | crypto.KeyObject): boolean {
-    if (!this.data.signatures || !this.data.payload) {
-      console.error("Cannot verify: vCon is not signed");
-      throw new Error("vCon is not signed");
+  addCriticalExtension(name: string): void {
+    if (!this.data.critical) {
+      this.data.critical = [];
     }
-    
-    try {
-      console.log("Verifying vCon signature");
-      
-      // Extract components
-      const { protected: protectedHeader, signature } = this.data.signatures[0];
-      const payload = this.data.payload;
-      
-      // Convert public key to appropriate format
-      const publicKey = typeof publicKeyInput === 'string' 
-        ? publicKeyInput 
-        : publicKeyInput.export({ type: 'spki', format: 'pem' }).toString();
-      
-      // Create signature input
-      const signatureInput = `${protectedHeader}.${payload}`;
-      
-      // Convert base64url signature to base64
-      const signatureBase64 = signature
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-      
-      // Verify the signature
-      const verifier = crypto.createVerify('RSA-SHA256');
-      verifier.update(signatureInput);
-      const isValid = verifier.verify(publicKey, signatureBase64, 'base64');
-      
-      console.log("Signature verification result:", isValid);
-      return isValid;
-    } catch (error) {
-      console.warn("Invalid signature detected:", error);
-      return false;
+    if (!this.data.critical.includes(name)) {
+      this.data.critical.push(name);
+      this.addExtension(name);
     }
   }
 
   /**
-   * Generate a new RSA key pair for signing vCons.
-   * 
-   * This method generates a new RSA key pair that can be used for signing
-   * and verifying vCons.
-   * 
-   * @returns A tuple containing the private key and public key as PEM strings
-   * 
-   * @example
-   * ```typescript
-   * const [privateKey, publicKey] = Vcon.generateKeyPair();
-   * const vcon = Vcon.buildNew();
-   * vcon.sign(privateKey);
-   * const isValid = vcon.verify(publicKey);
-   * console.log(isValid);  // Prints true
-   * ```
+   * Check if an extension is used
    */
-  static generateKeyPair(): [string, string] {
-    console.log("Generating new RSA key pair");
-    
-    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-    });
-    
-    console.log("Successfully generated RSA key pair");
-    return [privateKey, publicKey];
+  hasExtension(name: string): boolean {
+    return this.data.extensions?.includes(name) ?? false;
   }
+
+  /**
+   * Check if an extension is critical
+   */
+  isCriticalExtension(name: string): boolean {
+    return this.data.critical?.includes(name) ?? false;
+  }
+
+  // Group methods
+
+  addGroup(group: Group | string): void {
+    if (!this.data.group) {
+      this.data.group = [];
+    }
+    (this.data.group as (Group | string)[]).push(group);
+    this.data.updated_at = new Date().toISOString();
+  }
+
+  // Property getters
 
   get parties(): Party[] {
     return this.data.parties || [];
@@ -336,34 +269,69 @@ export class Vcon {
   }
 
   get vcon(): string {
-    return this.data.vcon || '';
+    return this.data.vcon || VCON_VERSION;
   }
 
   get subject(): string | undefined {
     return this.data.subject;
   }
 
-  get created_at(): Date {
+  set subject(value: string | undefined) {
+    this.data.subject = value;
+    this.data.updated_at = new Date().toISOString();
+  }
+
+  get created_at(): Date | string {
     return this.data.created_at!;
   }
 
-  get updated_at(): Date {
-    return this.data.updated_at!;
+  get updated_at(): Date | string | undefined {
+    return this.data.updated_at;
   }
 
-  get redacted(): boolean {
-    return this.data.redacted || false;
+  get redacted(): Redacted | boolean | undefined {
+    return this.data.redacted;
   }
 
-  get appended(): boolean {
-    return this.data.appended || false;
+  set redacted(value: Redacted | boolean | undefined) {
+    this.data.redacted = value;
+    this.data.updated_at = new Date().toISOString();
   }
 
-  get group(): string | undefined {
+  get amended(): Amended | boolean | undefined {
+    return this.data.amended;
+  }
+
+  set amended(value: Amended | boolean | undefined) {
+    this.data.amended = value;
+    this.data.updated_at = new Date().toISOString();
+  }
+
+  get group(): Group[] | string[] | undefined {
     return this.data.group;
+  }
+
+  get extensions(): string[] | undefined {
+    return this.data.extensions;
+  }
+
+  get critical(): string[] | undefined {
+    return this.data.critical;
   }
 
   get meta(): Record<string, any> | undefined {
     return this.data.meta;
+  }
+
+  set meta(value: Record<string, any> | undefined) {
+    this.data.meta = value;
+    this.data.updated_at = new Date().toISOString();
+  }
+
+  /**
+   * @deprecated Use amended instead (vcon-core-01 uses amended, not appended)
+   */
+  get appended(): boolean {
+    return !!this.data.amended;
   }
 }

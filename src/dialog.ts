@@ -1,7 +1,32 @@
-import { Dialog as DialogType, PartyHistory } from './types';
+import {
+  Dialog as DialogType,
+  PartyHistory,
+  DialogType as DialogTypeEnum,
+  DialogDisposition,
+  Encoding,
+  SessionId
+} from './types';
 import { PartyHistory as PartyHistoryClass } from './party';
 
-export class Dialog implements DialogType {
+/**
+ * Dialog class representing a conversation segment.
+ * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ */
+export class Dialog implements Partial<DialogType> {
+  /** Valid dialog types per vcon-core-01 */
+  static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'transfer', 'incomplete'];
+
+  /** Valid dispositions for incomplete dialogs */
+  static readonly DISPOSITIONS: DialogDisposition[] = [
+    'no-answer',
+    'congestion',
+    'failed',
+    'busy',
+    'hung-up',
+    'voicemail-no-message'
+  ];
+
+  /** Supported MIME types for media content */
   static readonly MIME_TYPES = [
     'text/plain',
     'audio/x-wav',
@@ -16,23 +41,36 @@ export class Dialog implements DialogType {
     'video/mp4',
     'video/x-mp4',
     'video/ogg',
+    'video/webm',
     'multipart/mixed',
-    'message/rfc822'
+    'message/rfc822',
+    'application/json'
   ];
 
-  readonly type: string;
-  readonly start: Date;
-  readonly parties: number[];
+  /** Valid encodings per vcon-core-01 */
+  static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
+
+  readonly type: DialogTypeEnum | string;
+  readonly start: Date | string;
+  parties?: number | number[];
   originator?: number;
-  mimetype?: string;
+  mediatype?: string;
   filename?: string;
   body?: string;
-  encoding?: string;
+  encoding?: Encoding | string;
   url?: string;
+  content_hash?: string;
+  duration?: number;
+  disposition?: DialogDisposition | string;
+  session_id?: SessionId | SessionId[];
+  party_history?: PartyHistory[];
+  application?: string;
+
+  // Legacy/extension fields
+  /** @deprecated Use mediatype instead */
+  mimetype?: string;
   alg?: string;
   signature?: string;
-  disposition?: string;
-  party_history?: PartyHistory[];
   transferee?: number;
   transferor?: number;
   transfer_target?: number;
@@ -42,75 +80,126 @@ export class Dialog implements DialogType {
   campaign?: string;
   interaction?: string;
   skill?: string;
-  duration?: number;
   meta?: Record<string, any>;
   [key: string]: any;
 
-  constructor(params: Partial<DialogType> & { type: string; start: Date; parties: number[] }) {
+  constructor(params: Partial<DialogType> & { type: DialogTypeEnum | string; start: Date | string }) {
     this.type = params.type;
     this.start = params.start;
-    this.parties = params.parties;
-    
+
+    // Copy parties - can be number or number[] per vcon-core-01
+    if (params.parties !== undefined) {
+      this.parties = params.parties;
+    }
+
     // Copy other properties
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && !['type', 'start', 'parties'].includes(key)) {
         (this as any)[key] = value;
       }
     });
+
+    // Handle mediatype/mimetype compatibility
+    if (params.mimetype && !params.mediatype) {
+      this.mediatype = params.mimetype;
+    }
   }
 
   toDict(): DialogType {
     const dict: DialogType = {
       type: this.type,
-      start: this.start,
-      parties: this.parties
+      start: this.start instanceof Date ? this.start.toISOString() : this.start
     };
+
+    // Add parties if defined
+    if (this.parties !== undefined) {
+      dict.parties = this.parties;
+    }
 
     // Only include properties that are not undefined
     Object.entries(this).forEach(([key, value]) => {
       if (value !== undefined && !['type', 'start', 'parties'].includes(key)) {
-        dict[key] = value;
+        // Convert Date objects to ISO strings
+        if (value instanceof Date) {
+          dict[key] = value.toISOString();
+        } else {
+          dict[key] = value;
+        }
       }
     });
 
     return dict;
   }
 
-  addExternalData(url: string, filename: string, mimetype: string): void {
-    if (!Dialog.MIME_TYPES.includes(mimetype)) {
-      throw new Error(`Invalid MIME type: ${mimetype}`);
-    }
-
+  /**
+   * Add external data reference (url + content_hash)
+   */
+  addExternalData(url: string, mediatype: string, options?: {
+    filename?: string;
+    content_hash?: string;
+  }): void {
     this.url = url;
-    this.filename = filename;
-    this.mimetype = mimetype;
+    this.mediatype = mediatype;
+    if (options?.filename) {
+      this.filename = options.filename;
+    }
+    if (options?.content_hash) {
+      this.content_hash = options.content_hash;
+    }
+    // Clear inline data
     this.body = undefined;
     this.encoding = undefined;
   }
 
-  addInlineData(body: string, filename: string, mimetype: string): void {
-    if (!Dialog.MIME_TYPES.includes(mimetype)) {
-      throw new Error(`Invalid MIME type: ${mimetype}`);
-    }
-
+  /**
+   * Add inline data (body + encoding)
+   */
+  addInlineData(body: string, mediatype: string, options?: {
+    encoding?: Encoding;
+    filename?: string;
+  }): void {
     this.body = body;
-    this.filename = filename;
-    this.mimetype = mimetype;
+    this.mediatype = mediatype;
+    this.encoding = options?.encoding || 'none';
+    if (options?.filename) {
+      this.filename = options.filename;
+    }
+    // Clear external data
     this.url = undefined;
+    this.content_hash = undefined;
   }
 
+  /**
+   * Check if dialog has external data reference
+   */
   isExternalData(): boolean {
     return this.url !== undefined;
   }
 
+  /**
+   * Check if dialog has inline data
+   */
   isInlineData(): boolean {
     return this.body !== undefined;
   }
 
+  /**
+   * Check if dialog is text type
+   */
   isText(): boolean {
-    return this.mimetype === 'text/plain';
+    return this.type === 'text' || this.mediatype === 'text/plain';
   }
 
+  /**
+   * Check if dialog is recording type (audio)
+   */
+  isRecording(): boolean {
+    return this.type === 'recording';
+  }
+
+  /**
+   * Check if dialog is audio content
+   */
   isAudio(): boolean {
     return [
       'audio/x-wav',
@@ -122,14 +211,76 @@ export class Dialog implements DialogType {
       'audio/webm',
       'audio/x-m4a',
       'audio/aac'
-    ].includes(this.mimetype || '');
+    ].includes(this.mediatype || '');
   }
 
+  /**
+   * Check if dialog is video content
+   */
   isVideo(): boolean {
-    return ['video/mp4', 'video/x-mp4', 'video/ogg'].includes(this.mimetype || '');
+    return ['video/mp4', 'video/x-mp4', 'video/ogg', 'video/webm'].includes(this.mediatype || '');
   }
 
+  /**
+   * Check if dialog is email content
+   */
   isEmail(): boolean {
-    return this.mimetype === 'message/rfc822';
+    return this.mediatype === 'message/rfc822';
   }
-} 
+
+  /**
+   * Check if dialog is a transfer type
+   */
+  isTransfer(): boolean {
+    return this.type === 'transfer';
+  }
+
+  /**
+   * Check if dialog is incomplete
+   */
+  isIncomplete(): boolean {
+    return this.type === 'incomplete';
+  }
+
+  /**
+   * Validate the dialog against vcon-core-01 requirements
+   */
+  validate(): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Type is required
+    if (!this.type) {
+      errors.push('Dialog type is required');
+    }
+
+    // Start is required
+    if (!this.start) {
+      errors.push('Dialog start time is required');
+    }
+
+    // If incomplete, disposition should be set
+    if (this.type === 'incomplete' && !this.disposition) {
+      errors.push('Disposition is required for incomplete dialogs');
+    }
+
+    // Validate disposition value if set
+    if (this.disposition && !Dialog.DISPOSITIONS.includes(this.disposition as DialogDisposition)) {
+      errors.push(`Invalid disposition: ${this.disposition}. Must be one of: ${Dialog.DISPOSITIONS.join(', ')}`);
+    }
+
+    // Cannot have both inline and external data
+    if (this.body !== undefined && this.url !== undefined) {
+      errors.push('Dialog cannot have both inline (body) and external (url) data');
+    }
+
+    // Validate encoding if set
+    if (this.encoding && !Dialog.VALID_ENCODINGS.includes(this.encoding as Encoding)) {
+      errors.push(`Invalid encoding: ${this.encoding}. Must be one of: ${Dialog.VALID_ENCODINGS.join(', ')}`);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+}
