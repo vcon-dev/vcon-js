@@ -1,4 +1,8 @@
-export type Encoding = 'base64' | 'base64url' | 'json' | 'none';
+/**
+ * vCon Type Definitions
+ * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-01
+ */
 
 /** Valid encoding types for inline content */
 export type Encoding = 'base64url' | 'json' | 'none';
@@ -250,6 +254,22 @@ export interface Group {
   meta?: Record<string, any>;
 }
 
+/** Redacted object reference */
+export interface Redacted {
+  /** UUID of original unredacted vCon */
+  uuid?: string;
+  /** Additional redaction metadata */
+  [key: string]: any;
+}
+
+/** Amended object reference */
+export interface Amended {
+  /** UUID of amended vCon */
+  uuid?: string;
+  /** Additional amendment metadata */
+  [key: string]: any;
+}
+
 /**
  * Interface for JWS signature components according to the vCon specification.
  * Used in the signatures array of a signed vCon.
@@ -325,3 +345,6 @@ export interface VconData {
    */
   payload?: string;
 }
+
+/** vCon version constant for vcon-core-01 */
+export const VCON_VERSION = '0.0.1';
