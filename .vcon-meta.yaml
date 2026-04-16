@@ -1,0 +1,18 @@
+# .vcon-meta.yaml — vCon Ecosystem Repo Self-Descriptor
+# Schema: https://github.com/vconic/vconic-docs/blob/main/schema/repo-descriptor.schema.json
+
+name: vcon-js
+category: core-library
+tags: [typescript, javascript, vcon, library, npm]
+description: "TypeScript/JavaScript library for creating and managing vCons"
+spec_version: "0.4.0"
+
+relationships:
+  - type: related-to
+    target: vcon-dev/vcon
+    note: "JS counterpart to Python vCon library"
+
+entry_points:
+  readme: README.md
+  claude_md: null
+  api_docs: null
