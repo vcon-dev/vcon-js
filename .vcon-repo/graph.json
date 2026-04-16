@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "vcon-js",
+  "repo_version": "0.2.0",
+  "archetype": "data-repo",
+  "generated_at": "2026-04-16T15:15:45.850106+00:00",
+  "stats": {
+    "node_count": 10,
+    "edge_count": 5
+  },
+  "nodes": [
+    {
+      "id": "dataset:root",
+      "type": "dataset",
+      "name": "vcon-js",
+      "description": "285 files, 1.0 MB",
+      "file_count": 285,
+      "size_mb": 1.0
+    },
+    {
+      "id": "category:json",
+      "type": "category",
+      "name": ".json files",
+      "description": "263 files",
+      "count": 263
+    },
+    {
+      "id": "category:ts",
+      "type": "category",
+      "name": ".ts files",
+      "description": "16 files",
+      "count": 16
+    },
+    {
+      "id": "category:md",
+      "type": "category",
+      "name": ".md files",
+      "description": "3 files",
+      "count": 3
+    },
+    {
+      "id": "category:js",
+      "type": "category",
+      "name": ".js files",
+      "description": "1 files",
+      "count": 1
+    },
+    {
+      "id": "category:sh",
+      "type": "category",
+      "name": ".sh files",
+      "description": "1 files",
+      "count": 1
+    },
+    {
+      "id": "component:examples",
+      "type": "component",
+      "name": "examples",
+      "file": "examples",
+      "description": "5 files"
+    },
+    {
+      "id": "component:src",
+      "type": "component",
+      "name": "src",
+      "file": "src",
+      "description": "11 files"
+    },
+    {
+      "id": "component:test-vcons",
+      "type": "component",
+      "name": "test-vcons",
+      "file": "test-vcons",
+      "description": "261 files"
+    },
+    {
+      "id": "document:readme",
+      "type": "document",
+      "name": "README",
+      "file": "README.md"
+    }
+  ],
+  "edges": [
+    {
+      "from": "dataset:root",
+      "to": "category:json",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:ts",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:md",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:js",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:sh",
+      "type": "contains"
+    }
+  ],
+  "subsystems": []
+}
