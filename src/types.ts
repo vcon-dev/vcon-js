@@ -1,13 +1,13 @@
 /**
  * vCon Type Definitions
- * Compliant with IETF draft-ietf-vcon-vcon-core-01
- * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-01
+ * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02
  */
 
 /** Valid encoding types for inline content */
 export type Encoding = 'base64url' | 'json' | 'none';
 
-/** Dialog types as defined in vcon-core-01 */
+/** Dialog types as defined in vcon-core-02 */
 export type DialogType = 'recording' | 'text' | 'transfer' | 'incomplete';
 
 /** Disposition values for incomplete dialogs */
@@ -19,17 +19,24 @@ export interface ContentHash {
   value: string;
 }
 
-/** Session identifier object */
+/** Session identifier object per RFC 7989 section 5 */
 export interface SessionId {
-  id: string;
-  type?: string;
+  /** Local UUID as defined in RFC 7989 */
+  local: string;
+  /** Remote UUID as defined in RFC 7989 */
+  remote: string;
 }
 
 /** Party history event for tracking party state changes */
 export interface PartyHistory {
+  /** Index of the party for this event */
   party: number;
+  /** Event type: join, drop, hold, unhold, mute, unmute, keydown, keyup */
   event: string;
+  /** Time at which this event occurred */
   time: Date | string;
+  /** DTMF digit or button label (required for keydown/keyup events) */
+  button?: string;
 }
 
 /** Civic address for geographic location per RFC 5139 */
@@ -132,6 +139,8 @@ export interface Dialog {
   party_history?: PartyHistory[];
   /** Application identifier */
   application?: string;
+  /** Message identifier for cross-referencing (e.g., SMTP message-id) */
+  message_id?: string;
 
   // Inline content (mutually exclusive with url/content_hash)
   /** Inline content body */
@@ -142,8 +151,8 @@ export interface Dialog {
   // External content (mutually exclusive with body/encoding)
   /** External URL reference */
   url?: string;
-  /** Content hash for externally referenced files */
-  content_hash?: string;
+  /** Content hash for externally referenced files (single or array for multiple algorithms) */
+  content_hash?: string | string[];
 
   // Legacy/extension fields
   /** @deprecated Use mediatype instead */
@@ -178,7 +187,7 @@ export interface Dialog {
 
 /** Analysis object for analytical results */
 export interface Analysis {
-  /** Analysis type identifier */
+  /** Analysis type identifier (e.g., report, sentiment, summary, transcript, translation, tts) */
   type: string;
   /** Dialog indices analyzed */
   dialog: number | number[];
@@ -202,8 +211,8 @@ export interface Analysis {
   // External content (mutually exclusive with body/encoding)
   /** External URL reference */
   url?: string;
-  /** Content hash for externally referenced files */
-  content_hash?: string;
+  /** Content hash for externally referenced files (single or array for multiple algorithms) */
+  content_hash?: string | string[];
 
   /** Additional properties */
   extra?: Record<string, any>;
@@ -237,8 +246,8 @@ export interface Attachment {
   // External content (mutually exclusive with body/encoding)
   /** External URL reference */
   url?: string;
-  /** Content hash for externally referenced files */
-  content_hash?: string;
+  /** Content hash for externally referenced files (single or array for multiple algorithms) */
+  content_hash?: string | string[];
 
   /** Allow additional properties for extensions */
   [key: string]: any;
@@ -254,20 +263,26 @@ export interface Group {
   meta?: Record<string, any>;
 }
 
-/** Redacted object reference */
+/** Redacted object reference per Section 4.1.8.1 */
 export interface Redacted {
   /** UUID of original unredacted vCon */
   uuid?: string;
-  /** Additional redaction metadata */
-  [key: string]: any;
+  /** Type of redaction performed (indicates what information was redacted) */
+  type?: string;
+  /** URL to original vCon (access should be restricted) */
+  url?: string;
+  /** Content hash for integrity (single or array for multiple algorithms) */
+  content_hash?: string | string[];
 }
 
-/** Amended object reference */
+/** Amended object reference per Section 4.1.9.1 */
 export interface Amended {
-  /** UUID of amended vCon */
+  /** UUID of prior vCon instance version */
   uuid?: string;
-  /** Additional amendment metadata */
-  [key: string]: any;
+  /** URL to prior vCon version */
+  url?: string;
+  /** Content hash for integrity (single or array for multiple algorithms) */
+  content_hash?: string | string[];
 }
 
 /**
@@ -346,5 +361,5 @@ export interface VconData {
   payload?: string;
 }
 
-/** vCon version constant for vcon-core-01 */
-export const VCON_VERSION = '0.0.1';
+/** vCon version constant for vcon-core-02 (note: vcon parameter is DEPRECATED per Section 4.1.1) */
+export const VCON_VERSION = '0.4.0';

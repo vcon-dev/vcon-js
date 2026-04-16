@@ -2,10 +2,10 @@ import { Attachment as AttachmentType, Encoding } from './types';
 
 /**
  * Attachment class for representing attached files in a vCon.
- * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ * Compliant with IETF draft-ietf-vcon-vcon-core-02
  */
 export class Attachment implements Partial<AttachmentType> {
-  /** Valid encodings per vcon-core-01 */
+  /** Valid encodings per vcon-core-02 */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
   type?: string;
@@ -18,7 +18,7 @@ export class Attachment implements Partial<AttachmentType> {
   body?: any;
   encoding?: Encoding | string;
   url?: string;
-  content_hash?: string;
+  content_hash?: string | string[];
   [key: string]: any;
 
   constructor(params: Partial<AttachmentType> = {}) {
@@ -63,7 +63,7 @@ export class Attachment implements Partial<AttachmentType> {
    */
   addExternalData(url: string, mediatype: string, options?: {
     filename?: string;
-    content_hash?: string;
+    content_hash?: string | string[];
   }): void {
     this.url = url;
     this.mediatype = mediatype;
@@ -111,7 +111,7 @@ export class Attachment implements Partial<AttachmentType> {
   }
 
   /**
-   * Validate the attachment against vcon-core-01 requirements
+   * Validate the attachment against vcon-core-02 requirements
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];

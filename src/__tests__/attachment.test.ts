@@ -96,7 +96,7 @@ describe('Attachment', () => {
     expect(attachment.encoding).toBe('none');
   });
 
-  it('should support all vcon-core-01 fields', () => {
+  it('should support all vcon-core-02 fields', () => {
     const start = new Date('2025-01-15T10:00:00Z');
     const attachment = new Attachment({
       type: 'document',
@@ -167,5 +167,20 @@ describe('Attachment', () => {
     expect(attachment.dialog).toBe(0);
     const dict = attachment.toDict();
     expect(dict.dialog).toBe(0);
+  });
+
+  it('should support array content_hash (vcon-core-02)', () => {
+    const attachment = new Attachment({ type: 'image/png' });
+
+    attachment.addExternalData(
+      'https://example.com/image.png',
+      'image/png',
+      { content_hash: ['sha512-abc123', 'sha256-def456'] }
+    );
+
+    expect(attachment.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
+    
+    const dict = attachment.toDict();
+    expect(dict.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
   });
 });

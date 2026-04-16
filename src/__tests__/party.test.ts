@@ -16,7 +16,7 @@ describe('Party', () => {
     });
   });
 
-  it('should create a party with all vcon-core-01 properties', () => {
+  it('should create a party with all vcon-core-02 properties', () => {
     const civicAddress: CivicAddress = {
       country: 'US',
       a1: 'NY',
@@ -145,23 +145,23 @@ describe('Party', () => {
 describe('PartyHistory', () => {
   it('should create party history with Date object', () => {
     const time = new Date('2025-01-15T10:00:00Z');
-    const history = new PartyHistory(0, 'joined', time);
+    const history = new PartyHistory(0, 'join', time);
 
     expect(history.party).toBe(0);
-    expect(history.event).toBe('joined');
+    expect(history.event).toBe('join');
     expect(history.time).toBe(time);
 
     const dict = history.toDict();
     expect(dict).toEqual({
       party: 0,
-      event: 'joined',
+      event: 'join',
       time: '2025-01-15T10:00:00.000Z'
     });
   });
 
   it('should create party history with string time', () => {
     const timeStr = '2025-01-15T10:00:00Z';
-    const history = new PartyHistory(0, 'joined', timeStr);
+    const history = new PartyHistory(0, 'join', timeStr);
 
     expect(history.time).toBe(timeStr);
 
@@ -172,23 +172,101 @@ describe('PartyHistory', () => {
   it('should create party history from dict', () => {
     const data = {
       party: 1,
-      event: 'left',
+      event: 'drop',
       time: '2025-01-15T11:00:00Z'
     };
 
     const history = PartyHistory.fromDict(data);
 
     expect(history.party).toBe(1);
-    expect(history.event).toBe('left');
+    expect(history.event).toBe('drop');
     expect(history.time).toBe('2025-01-15T11:00:00Z');
   });
 
-  it('should support various event types', () => {
-    const events = ['joined', 'left', 'hold', 'resume', 'mute', 'unmute'];
+  it('should support all valid event types per vcon-core-02', () => {
+    const events = ['join', 'drop', 'hold', 'unhold', 'mute', 'unmute', 'keydown', 'keyup'];
+
+    expect(PartyHistory.VALID_EVENTS).toEqual(events);
 
     events.forEach(event => {
       const history = new PartyHistory(0, event, new Date());
       expect(history.event).toBe(event);
     });
+  });
+
+  it('should support button parameter for DTMF events (vcon-core-02)', () => {
+    const time = new Date('2025-01-15T10:00:00Z');
+    const keydownHistory = new PartyHistory(0, 'keydown', time, '5');
+
+    expect(keydownHistory.party).toBe(0);
+    expect(keydownHistory.event).toBe('keydown');
+    expect(keydownHistory.button).toBe('5');
+
+    const dict = keydownHistory.toDict();
+    expect(dict).toEqual({
+      party: 0,
+      event: 'keydown',
+      time: '2025-01-15T10:00:00.000Z',
+      button: '5'
+    });
+  });
+
+  it('should create party history with button from dict', () => {
+    const data = {
+      party: 0,
+      event: 'keyup',
+      time: '2025-01-15T10:00:00Z',
+      button: '#'
+    };
+
+    const history = PartyHistory.fromDict(data);
+
+    expect(history.party).toBe(0);
+    expect(history.event).toBe('keyup');
+    expect(history.button).toBe('#');
+  });
+
+  it('should not include button in dict if undefined', () => {
+    const history = new PartyHistory(0, 'join', new Date());
+
+    const dict = history.toDict();
+    expect(dict.button).toBeUndefined();
+    expect('button' in dict).toBe(false);
+  });
+
+  it('should validate valid events', () => {
+    const validHistory = new PartyHistory(0, 'join', new Date());
+    const result = validHistory.validate();
+    expect(result.valid).toBe(true);
+    expect(result.errors.length).toBe(0);
+  });
+
+  it('should invalidate unknown events', () => {
+    const invalidHistory = new PartyHistory(0, 'unknown_event', new Date());
+    const result = invalidHistory.validate();
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain('Invalid event');
+  });
+
+  it('should require button for keydown events', () => {
+    const keydownNoButton = new PartyHistory(0, 'keydown', new Date());
+    const result = keydownNoButton.validate();
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('button parameter is required for keydown events');
+  });
+
+  it('should require button for keyup events', () => {
+    const keyupNoButton = new PartyHistory(0, 'keyup', new Date());
+    const result = keyupNoButton.validate();
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('button parameter is required for keyup events');
+  });
+
+  it('should validate keydown with button', () => {
+    const keydownWithButton = new PartyHistory(0, 'keydown', new Date(), '9');
+    const result = keydownWithButton.validate();
+    expect(result.valid).toBe(true);
+    expect(result.errors.length).toBe(0);
   });
 });

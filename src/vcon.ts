@@ -18,7 +18,7 @@ import * as crypto from 'crypto';
 
 /**
  * Main Vcon class for creating and managing vCon conversation containers.
- * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ * Compliant with IETF draft-ietf-vcon-vcon-core-02
  */
 export class Vcon {
   data: VconData;
@@ -92,7 +92,7 @@ export class Vcon {
     body?: any;
     encoding?: Encoding;
     url?: string;
-    content_hash?: string;
+    content_hash?: string | string[];
     mediatype?: string;
     filename?: string;
     start?: Date | string;
@@ -130,7 +130,7 @@ export class Vcon {
     body?: Record<string, any> | any[] | string;
     encoding?: Encoding;
     url?: string;
-    content_hash?: string;
+    content_hash?: string | string[];
     mediatype?: string;
     filename?: string;
     extra?: Record<string, any>;

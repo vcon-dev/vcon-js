@@ -1,6 +1,6 @@
 # vcon-js
 
-A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with [IETF draft-ietf-vcon-vcon-core-01](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-01).
+A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with [IETF draft-ietf-vcon-vcon-core-02](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02).
 
 ## Installation
 
@@ -123,7 +123,7 @@ const sentimentAnalysis = vcon.findAnalysisByType('sentiment');
 
 ### Working with Dialog Types
 
-vcon-core-01 defines four dialog types: `recording`, `text`, `transfer`, and `incomplete`.
+vcon-core-02 defines four dialog types: `recording`, `text`, `transfer`, and `incomplete`.
 
 ```typescript
 import { Dialog } from 'vcon-js';
@@ -164,7 +164,7 @@ console.log(recordingDialog.isRecording()); // true
 console.log(incompleteDialog.isIncomplete()); // true
 ```
 
-### Working with Extensions (vcon-core-01)
+### Working with Extensions (vcon-core-02)
 
 ```typescript
 import { Vcon } from 'vcon-js';
@@ -209,7 +209,7 @@ const category = vcon.getTag('category');
 
 ### Working with Party History
 
-Track party events within a dialog (join, leave, hold, etc.):
+Track party events within a dialog (join, drop, hold, unhold, mute, unmute, keydown, keyup):
 
 ```typescript
 import { Dialog, PartyHistory } from 'vcon-js';
@@ -222,12 +222,15 @@ const dialog = new Dialog({
 
 // Add party history events
 dialog.party_history = [
-  new PartyHistory(0, 'joined', new Date()).toDict(),
-  new PartyHistory(1, 'joined', new Date(Date.now() + 5000)).toDict(),
+  new PartyHistory(0, 'join', new Date()).toDict(),
+  new PartyHistory(1, 'join', new Date(Date.now() + 5000)).toDict(),
   new PartyHistory(1, 'hold', new Date(Date.now() + 60000)).toDict(),
-  new PartyHistory(1, 'resume', new Date(Date.now() + 120000)).toDict(),
-  new PartyHistory(0, 'left', new Date(Date.now() + 300000)).toDict(),
-  new PartyHistory(1, 'left', new Date(Date.now() + 300000)).toDict()
+  new PartyHistory(1, 'unhold', new Date(Date.now() + 120000)).toDict(),
+  // DTMF keypress events (button parameter required for keydown/keyup)
+  new PartyHistory(0, 'keydown', new Date(Date.now() + 150000), '5').toDict(),
+  new PartyHistory(0, 'keyup', new Date(Date.now() + 150100), '5').toDict(),
+  new PartyHistory(0, 'drop', new Date(Date.now() + 300000)).toDict(),
+  new PartyHistory(1, 'drop', new Date(Date.now() + 300000)).toDict()
 ];
 ```
 
@@ -248,9 +251,26 @@ const transferDialog = new Dialog({
 });
 ```
 
+### Working with Message IDs
+
+For email and messaging systems, use the `message_id` parameter to prevent duplicates:
+
+```typescript
+import { Dialog } from 'vcon-js';
+
+const emailDialog = new Dialog({
+  type: 'text',
+  start: new Date(),
+  parties: [0, 1],
+  mediatype: 'message/rfc822',
+  message_id: '<abc123@example.com>',  // SMTP message-id
+  body: 'Email content here...'
+});
+```
+
 ### Party Identifiers
 
-vcon-core-01 supports multiple party identifier types:
+vcon-core-02 supports multiple party identifier types:
 
 ```typescript
 import { Party } from 'vcon-js';
@@ -349,7 +369,7 @@ Class for representing parties in a vCon.
 - `toDict()`: Converts to plain object
 - `hasIdentifier()`: Checks if party has any identifier
 - `getPrimaryIdentifier()`: Gets the primary identifier
-- `validate()`: Validates against vcon-core-01 recommendations
+- `validate()`: Validates against vcon-core-02 recommendations
 
 ### Dialog
 
@@ -374,12 +394,13 @@ Dialog.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `body?: string`: Inline content
 - `encoding?: string`: Content encoding (`base64url`, `json`, `none`)
 - `url?: string`: External URL reference
-- `content_hash?: string`: Content hash for external files
+- `content_hash?: string | string[]`: Content hash for external files (single or array)
 - `duration?: number`: Duration in seconds
 - `disposition?: string`: Disposition for incomplete dialogs
-- `session_id?: SessionId`: Session identifier
+- `session_id?: SessionId`: Session identifier (with `local` and `remote` UUIDs per RFC 7989)
 - `party_history?: PartyHistory[]`: Party event history
 - `application?: string`: Application that created the dialog (e.g., 'zoom', 'teams')
+- `message_id?: string`: Message identifier for cross-referencing (e.g., SMTP message-id)
 
 #### Methods
 
@@ -395,7 +416,7 @@ Dialog.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `isAudio()`: Checks if audio content
 - `isVideo()`: Checks if video content
 - `isEmail()`: Checks if email content
-- `validate()`: Validates against vcon-core-01
+- `validate()`: Validates against vcon-core-02
 
 ### Attachment
 
@@ -419,7 +440,7 @@ Attachment.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `body?: any`: Inline content
 - `encoding?: string`: Content encoding
 - `url?: string`: External URL
-- `content_hash?: string`: Content hash
+- `content_hash?: string | string[]`: Content hash (single or array for multiple algorithms)
 
 #### Methods
 
@@ -428,35 +449,52 @@ Attachment.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `addInlineData(body, mediatype, options?)`: Adds inline content
 - `isExternalData()`: Checks if has external data
 - `isInlineData()`: Checks if has inline data
-- `validate()`: Validates against vcon-core-01
+- `validate()`: Validates against vcon-core-02
 
 ### PartyHistory
 
 Class for tracking party events within a dialog.
 
+#### Static Constants
+
+```typescript
+PartyHistory.VALID_EVENTS  // ['join', 'drop', 'hold', 'unhold', 'mute', 'unmute', 'keydown', 'keyup']
+```
+
 #### Constructor
 
 ```typescript
-new PartyHistory(party: number, event: string, time: Date | string)
+new PartyHistory(party: number, event: string, time: Date | string, button?: string)
 ```
 
 #### Properties
 
 - `party: number`: Party index
-- `event: string`: Event type (e.g., 'joined', 'left', 'hold', 'resume', 'mute', 'unmute')
+- `event: string`: Event type (`join`, `drop`, `hold`, `unhold`, `mute`, `unmute`, `keydown`, `keyup`)
 - `time: Date | string`: Event timestamp
+- `button?: string`: DTMF digit or button label (required for `keydown`/`keyup` events)
 
 #### Methods
 
 - `toDict()`: Converts to plain object with ISO timestamp
 - `static fromDict(data)`: Creates PartyHistory from plain object
+- `validate()`: Validates event type and button requirement
+
+### SessionId
+
+Session identifier object per RFC 7989.
+
+#### Properties
+
+- `local: string`: Local UUID as defined in RFC 7989
+- `remote: string`: Remote UUID as defined in RFC 7989
 
 ### Constants
 
 ```typescript
 import { VCON_VERSION } from 'vcon-js';
 
-console.log(VCON_VERSION); // '0.0.1'
+console.log(VCON_VERSION); // '0.4.0'
 ```
 
 ## Tutorial Examples
@@ -590,17 +628,22 @@ npm run example:conference  # Video conference
 npm run examples
 ```
 
-## vcon-core-01 Compliance
+## vcon-core-02 Compliance
 
-This library implements the [IETF draft-ietf-vcon-vcon-core-01](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-01) specification, including:
+This library implements the [IETF draft-ietf-vcon-vcon-core-02](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02) specification, including:
 
+- **Version**: `0.4.0` (note: the `vcon` parameter is DEPRECATED per Section 4.1.1)
 - **Dialog Types**: `recording`, `text`, `transfer`, `incomplete`
 - **Dispositions**: `no-answer`, `congestion`, `failed`, `busy`, `hung-up`, `voicemail-no-message`
 - **Encodings**: `base64url`, `json`, `none`
-- **Content Hash**: SHA-512 hash format for external references
+- **Content Hash**: SHA-512 hash format for external references (supports array for multiple algorithms)
 - **Extensions**: Support for `extensions` and `critical` arrays
 - **Party Identifiers**: tel, sip, mailto, stir, did, uuid
 - **Date Format**: RFC3339 timestamps
+- **SessionId**: Object with `local` and `remote` UUIDs per RFC 7989
+- **PartyHistory Events**: `join`, `drop`, `hold`, `unhold`, `mute`, `unmute`, `keydown`, `keyup`
+- **Message ID**: Support for `message_id` parameter in dialogs for cross-referencing
+- **Redacted/Amended**: Enhanced with `type`, `url`, and `content_hash` parameters
 
 ## Development
 

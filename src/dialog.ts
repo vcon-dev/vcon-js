@@ -10,10 +10,10 @@ import { PartyHistory as PartyHistoryClass } from './party';
 
 /**
  * Dialog class representing a conversation segment.
- * Compliant with IETF draft-ietf-vcon-vcon-core-01
+ * Compliant with IETF draft-ietf-vcon-vcon-core-02
  */
 export class Dialog implements Partial<DialogType> {
-  /** Valid dialog types per vcon-core-01 */
+  /** Valid dialog types per vcon-core-02 */
   static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'transfer', 'incomplete'];
 
   /** Valid dispositions for incomplete dialogs */
@@ -47,7 +47,7 @@ export class Dialog implements Partial<DialogType> {
     'application/json'
   ];
 
-  /** Valid encodings per vcon-core-01 */
+  /** Valid encodings per vcon-core-02 */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
   readonly type: DialogTypeEnum | string;
@@ -59,12 +59,13 @@ export class Dialog implements Partial<DialogType> {
   body?: string;
   encoding?: Encoding | string;
   url?: string;
-  content_hash?: string;
+  content_hash?: string | string[];
   duration?: number;
   disposition?: DialogDisposition | string;
   session_id?: SessionId | SessionId[];
   party_history?: PartyHistory[];
   application?: string;
+  message_id?: string;
 
   // Legacy/extension fields
   /** @deprecated Use mediatype instead */
@@ -87,7 +88,7 @@ export class Dialog implements Partial<DialogType> {
     this.type = params.type;
     this.start = params.start;
 
-    // Copy parties - can be number or number[] per vcon-core-01
+    // Copy parties - can be number or number[] per vcon-core-02
     if (params.parties !== undefined) {
       this.parties = params.parties;
     }
@@ -136,7 +137,7 @@ export class Dialog implements Partial<DialogType> {
    */
   addExternalData(url: string, mediatype: string, options?: {
     filename?: string;
-    content_hash?: string;
+    content_hash?: string | string[];
   }): void {
     this.url = url;
     this.mediatype = mediatype;
@@ -243,7 +244,7 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
-   * Validate the dialog against vcon-core-01 requirements
+   * Validate the dialog against vcon-core-02 requirements
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];

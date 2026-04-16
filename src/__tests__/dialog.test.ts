@@ -138,7 +138,7 @@ describe('Dialog', () => {
     expect(dialog.url).toBeUndefined();
   });
 
-  it('should check dialog types per vcon-core-01', () => {
+  it('should check dialog types per vcon-core-02', () => {
     const textDialog = new Dialog({
       type: 'text',
       start: new Date(),
@@ -256,7 +256,7 @@ describe('Dialog', () => {
     expect(dialog.mediatype).toBe('text/plain');
   });
 
-  it('should support single party integer per vcon-core-01', () => {
+  it('should support single party integer per vcon-core-02', () => {
     const dialog = new Dialog({
       type: 'text',
       start: new Date(),
@@ -266,5 +266,57 @@ describe('Dialog', () => {
     expect(dialog.parties).toBe(0);
     const dict = dialog.toDict();
     expect(dict.parties).toBe(0);
+  });
+
+  it('should support message_id parameter (vcon-core-02)', () => {
+    const dialog = new Dialog({
+      type: 'text',
+      start: new Date(),
+      parties: [0, 1],
+      mediatype: 'message/rfc822',
+      message_id: '<abc123@example.com>',
+      body: 'Email content'
+    });
+
+    expect(dialog.message_id).toBe('<abc123@example.com>');
+    
+    const dict = dialog.toDict();
+    expect(dict.message_id).toBe('<abc123@example.com>');
+  });
+
+  it('should support array content_hash (vcon-core-02)', () => {
+    const dialog = new Dialog({
+      type: 'recording',
+      start: new Date(),
+      parties: [0, 1]
+    });
+
+    dialog.addExternalData(
+      'https://example.com/audio.wav',
+      'audio/wav',
+      { content_hash: ['sha512-abc123', 'sha256-def456'] }
+    );
+
+    expect(dialog.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
+    
+    const dict = dialog.toDict();
+    expect(dict.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
+  });
+
+  it('should support SessionId with local and remote (vcon-core-02)', () => {
+    const dialog = new Dialog({
+      type: 'recording',
+      start: new Date(),
+      parties: [0, 1],
+      session_id: {
+        local: '550e8400-e29b-41d4-a716-446655440000',
+        remote: '550e8400-e29b-41d4-a716-446655440001'
+      }
+    });
+
+    expect(dialog.session_id).toEqual({
+      local: '550e8400-e29b-41d4-a716-446655440000',
+      remote: '550e8400-e29b-41d4-a716-446655440001'
+    });
   });
 });

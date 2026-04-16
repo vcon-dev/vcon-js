@@ -178,7 +178,7 @@ describe('Vcon', () => {
   });
 });
 
-describe('Vcon extensions (vcon-core-01)', () => {
+describe('Vcon extensions (vcon-core-02)', () => {
   it('should add and check extensions', () => {
     const vcon = Vcon.buildNew();
 
@@ -303,7 +303,7 @@ describe('Vcon with synthetic data', () => {
   });
 });
 
-describe('Vcon analysis with vcon-core-01 fields', () => {
+describe('Vcon analysis with vcon-core-02 fields', () => {
   it('should add analysis with product and schema', () => {
     const vcon = Vcon.buildNew();
 
@@ -339,5 +339,60 @@ describe('Vcon analysis with vcon-core-01 fields', () => {
 
     expect(vcon.analysis[0].url).toBe('https://example.com/transcription.json');
     expect(vcon.analysis[0].content_hash).toBe('sha512-abc123xyz');
+  });
+
+  it('should add analysis with array content_hash (vcon-core-02)', () => {
+    const vcon = Vcon.buildNew();
+
+    vcon.addAnalysis({
+      type: 'transcription',
+      dialog: 0,
+      vendor: 'cloud-service',
+      url: 'https://example.com/transcription.json',
+      content_hash: ['sha512-abc123xyz', 'sha256-def456'],
+      mediatype: 'application/json'
+    });
+
+    expect(vcon.analysis[0].content_hash).toEqual(['sha512-abc123xyz', 'sha256-def456']);
+  });
+});
+
+describe('Vcon vcon-core-02 specific features', () => {
+  it('should have VCON_VERSION as 0.4.0', () => {
+    expect(VCON_VERSION).toBe('0.4.0');
+  });
+
+  it('should handle redacted with type and content_hash (vcon-core-02)', () => {
+    const vcon = Vcon.buildNew();
+    
+    vcon.redacted = { 
+      uuid: 'original-uuid',
+      type: 'pii-masked',
+      url: 'https://example.com/original.vcon',
+      content_hash: 'sha512-abc123'
+    };
+    
+    expect(vcon.redacted).toEqual({ 
+      uuid: 'original-uuid',
+      type: 'pii-masked',
+      url: 'https://example.com/original.vcon',
+      content_hash: 'sha512-abc123'
+    });
+  });
+
+  it('should handle amended with url and content_hash (vcon-core-02)', () => {
+    const vcon = Vcon.buildNew();
+    
+    vcon.amended = { 
+      uuid: 'prior-uuid',
+      url: 'https://example.com/prior.vcon',
+      content_hash: ['sha512-abc', 'sha256-def']
+    };
+    
+    expect(vcon.amended).toEqual({ 
+      uuid: 'prior-uuid',
+      url: 'https://example.com/prior.vcon',
+      content_hash: ['sha512-abc', 'sha256-def']
+    });
   });
 });
