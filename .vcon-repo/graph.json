@@ -1,35 +1,35 @@
 {
   "schema_version": "1.0.0",
   "repo": "vcon-js",
-  "repo_version": "0.2.0",
+  "repo_version": "0.3.0",
   "archetype": "data-repo",
-  "generated_at": "2026-04-16T15:15:45.850106+00:00",
+  "generated_at": "2026-04-17T12:29:50.926696+00:00",
   "stats": {
-    "node_count": 10,
-    "edge_count": 5
+    "node_count": 12,
+    "edge_count": 7
   },
   "nodes": [
     {
       "id": "dataset:root",
       "type": "dataset",
       "name": "vcon-js",
-      "description": "285 files, 1.0 MB",
-      "file_count": 285,
-      "size_mb": 1.0
+      "description": "291 files, 1.8 MB",
+      "file_count": 291,
+      "size_mb": 1.8
     },
     {
       "id": "category:json",
       "type": "category",
       "name": ".json files",
-      "description": "263 files",
-      "count": 263
+      "description": "266 files",
+      "count": 266
     },
     {
       "id": "category:ts",
       "type": "category",
       "name": ".ts files",
-      "description": "16 files",
-      "count": 16
+      "description": "17 files",
+      "count": 17
     },
     {
       "id": "category:md",
@@ -53,11 +53,25 @@
       "count": 1
     },
     {
+      "id": "category:wav",
+      "type": "category",
+      "name": ".wav files",
+      "description": "1 files",
+      "count": 1
+    },
+    {
+      "id": "category:mp3",
+      "type": "category",
+      "name": ".mp3 files",
+      "description": "1 files",
+      "count": 1
+    },
+    {
       "id": "component:examples",
       "type": "component",
       "name": "examples",
       "file": "examples",
-      "description": "5 files"
+      "description": "11 files"
     },
     {
       "id": "component:src",
@@ -104,6 +118,16 @@
     {
       "from": "dataset:root",
       "to": "category:sh",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:wav",
+      "type": "contains"
+    },
+    {
+      "from": "dataset:root",
+      "to": "category:mp3",
       "type": "contains"
     }
   ],
