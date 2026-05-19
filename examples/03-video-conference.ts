@@ -96,7 +96,10 @@ const videoDialog = new Dialog({
   originator: 0,  // Sarah (host) started the meeting
   duration: conferenceDuration,
   application: 'zoom',
-  session_id: { id: 'mtg-98765432', type: 'zoom-meeting-id' }
+  session_id: {
+    local: '550e8400-e29b-41d4-a716-446655440000',
+    remote: '550e8400-e29b-41d4-a716-446655440001'
+  }
 });
 
 // Add external video reference
@@ -105,22 +108,22 @@ videoDialog.addExternalData(
   'video/mp4',
   {
     filename: 'q1-roadmap-review-2025-01-20.mp4',
-    content_hash: 'sha512-7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730'
+    content_hash: 'sha512-fYZelZskZpGMmGOvypQtD7idfJrAyZuvw3SVBN7Zdzm6Q5K76j6r10R6V9NAjEXVrUd9TdL5KbbX-8wOWflvgQ=='
   }
 );
 
-// Track when participants joined/left
+// Track when participants joined/left (spec events: join, drop, hold, unhold, mute, unmute, keydown, keyup)
 videoDialog.party_history = [
-  { party: 0, event: 'joined', time: conferenceStart.toISOString() },
-  { party: 1, event: 'joined', time: new Date(conferenceStart.getTime() + 30000).toISOString() },
-  { party: 2, event: 'joined', time: new Date(conferenceStart.getTime() + 45000).toISOString() },
-  { party: 3, event: 'joined', time: new Date(conferenceStart.getTime() + 180000).toISOString() }, // Raj joined late after retry
-  { party: 4, event: 'joined', time: new Date(conferenceStart.getTime() + 60000).toISOString() },
-  { party: 2, event: 'left', time: new Date(conferenceStart.getTime() + 3000000).toISOString() }, // Emma left at 50min
-  { party: 0, event: 'left', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 1, event: 'left', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 3, event: 'left', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 4, event: 'left', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() }
+  { party: 0, event: 'join', time: conferenceStart.toISOString() },
+  { party: 1, event: 'join', time: new Date(conferenceStart.getTime() + 30000).toISOString() },
+  { party: 2, event: 'join', time: new Date(conferenceStart.getTime() + 45000).toISOString() },
+  { party: 3, event: 'join', time: new Date(conferenceStart.getTime() + 180000).toISOString() }, // Raj joined late after retry
+  { party: 4, event: 'join', time: new Date(conferenceStart.getTime() + 60000).toISOString() },
+  { party: 2, event: 'drop', time: new Date(conferenceStart.getTime() + 3000000).toISOString() }, // Emma left at 50min
+  { party: 0, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
+  { party: 1, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
+  { party: 3, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
+  { party: 4, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() }
 ];
 
 vcon.addDialog(videoDialog);
@@ -140,7 +143,10 @@ const screenShareDialog = new Dialog({
 screenShareDialog.addExternalData(
   'https://recordings.company.com/meetings/2025/01/20/roadmap-screenshare.webm',
   'video/webm',
-  { filename: 'roadmap-screenshare.webm' }
+  {
+    filename: 'roadmap-screenshare.webm',
+    content_hash: 'sha512-Y3jOu_FlOcL2Q1F6Z_2cTtkqVuKHQ4-OJQ4Bk7CkqOR-eAYAZuTu_zPMRTRddqZcvVAJI9LSrtDHHzwgmZ5dGw=='
+  }
 );
 
 vcon.addDialog(screenShareDialog);
@@ -149,14 +155,14 @@ console.log('Added screen share recording dialog');
 // Step 6: Add attachments
 
 // Presentation slides (inline, base64url encoded)
-const presentationAttachment = vcon.addAttachment({
-  type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+vcon.addAttachment({
   purpose: 'presentation',
   mediatype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   filename: 'Q1-2025-Product-Roadmap.pptx',
   body: 'UEsDBBQAAAAIAGiC...',  // Truncated base64url content
   encoding: 'base64url',
-  party: 0,  // Shared by Sarah
+  party: 0,        // Shared by Sarah
+  dialog: 1,       // Main recording dialog
   start: new Date(conferenceStart.getTime() + 300000).toISOString()
 });
 console.log('\nAdded presentation attachment');
@@ -165,25 +171,27 @@ console.log('\nAdded presentation attachment');
 vcon.addAttachment({
   purpose: 'meeting-notes',
   url: 'https://docs.company.com/meetings/2025-01-20-roadmap-notes.md',
-  content_hash: 'sha512-abc123def456...',
+  content_hash: 'sha512-AfymyPwHQiWXh1khT2xSPHFOnImhfa4VnY8FmZjE0i1ZECN56dGOuPC4yKB8WIbCYWLrcwoeMm8gJBYNkPbjbA==',
   mediatype: 'text/markdown',
   filename: 'meeting-notes.md',
-  party: 1  // Mike took notes
+  party: 1,        // Mike took notes
+  dialog: 1
 });
 console.log('Added meeting notes attachment (external)');
 
 // Action items spreadsheet
 vcon.addAttachment({
-  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   purpose: 'action-items',
   url: 'https://docs.company.com/meetings/2025-01-20-action-items.xlsx',
+  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg==',
   mediatype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   filename: 'action-items.xlsx',
-  dialog: [1, 2]  // Related to main recording and screen share
+  party: 0,
+  dialog: [1, 2]   // Related to main recording and screen share
 });
 console.log('Added action items spreadsheet');
 
-// Chat transcript
+// Chat transcript (vCon-level attachment — party/dialog default to 0)
 vcon.addAttachment({
   purpose: 'chat-transcript',
   mediatype: 'text/plain',
@@ -209,7 +217,7 @@ vcon.addAnalysis({
   vendor: 'assembly-ai',
   product: 'universal-2',
   url: 'https://storage.company.com/transcripts/2025-01-20-roadmap.json',
-  content_hash: 'sha512-transcript123...',
+  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg==',
   mediatype: 'application/json'
 });
 
@@ -250,22 +258,14 @@ vcon.addAnalysis({
 
 console.log('Added 3 analysis items (transcription, action-items, summary)');
 
-// Step 8: Add group reference (this meeting is part of a series)
-vcon.addGroup({
-  uuid: 'meeting-series-roadmap-2025',
-  type: 'meeting-series',
-  meta: { series_name: 'Q1 2025 Roadmap Reviews', occurrence: 3 }
-});
-console.log('\nAdded group reference (meeting series)');
-
-// Step 9: Add tags
+// Step 8: Add tags
 vcon.addTag('meeting_type', 'roadmap-review');
 vcon.addTag('department', 'product');
 vcon.addTag('quarter', 'Q1-2025');
 vcon.addTag('recording_available', 'true');
 vcon.addTag('confidentiality', 'internal');
 
-// Step 10: Display comprehensive summary
+// Step 9: Display comprehensive summary
 console.log('\n--- vCon Summary ---');
 console.log(`UUID: ${vcon.uuid}`);
 console.log(`Version: ${vcon.vcon}`);
@@ -287,7 +287,7 @@ vcon.dialog.forEach((d, i) => {
 console.log('\nAttachments:');
 vcon.attachments.forEach((a, i) => {
   const location = a.url ? 'external' : 'inline';
-  console.log(`  [${i}] ${a.purpose || a.type} - ${a.filename} (${location})`);
+  console.log(`  [${i}] ${a.purpose} - ${a.filename} (${location})`);
 });
 
 console.log('\nAnalysis:');
@@ -297,10 +297,9 @@ vcon.analysis.forEach((a, i) => {
 });
 
 console.log('\nExtensions:', vcon.extensions);
-console.log('Groups:', vcon.group);
 console.log('Tags:', vcon.tags);
 
-// Step 11: Validate dialogs
+// Step 10: Validate dialogs
 console.log('\n--- Validation ---');
 vcon.dialog.forEach((d, i) => {
   const dialogObj = new Dialog(d as any);
@@ -311,7 +310,7 @@ vcon.dialog.forEach((d, i) => {
   }
 });
 
-// Step 12: Show JSON structure
+// Step 11: Show JSON structure
 console.log('\n--- vCon JSON Structure ---');
 const json = JSON.parse(vcon.toJson());
 console.log(`{
@@ -323,9 +322,8 @@ console.log(`{
   dialog: [${json.dialog.length} dialogs],
   attachments: [${json.attachments.length} attachments],
   analysis: [${json.analysis.length} analysis items],
-  group: [${json.group?.length || 0} groups],
   extensions: ${JSON.stringify(json.extensions)},
-  tags: ${JSON.stringify(json.tags)}
+  tags: ${JSON.stringify(vcon.tags)}
 }`);
 
 console.log('\n=== Example 3 Complete ===');

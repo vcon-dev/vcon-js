@@ -18,6 +18,9 @@ describe('Vcon', () => {
     expect(vcon.attachments).toEqual([]);
     expect(vcon.analysis).toEqual([]);
     expect(vcon.tags).toEqual({});
+    // tags are NOT stored as a top-level field — they live in a
+    // purpose="tags" attachment per draft-ietf-vcon-vcon-core-02.
+    expect((vcon.toDict() as any).tags).toBeUndefined();
   });
 
   it('should create a vCon from JSON', () => {
@@ -28,8 +31,7 @@ describe('Vcon', () => {
       parties: [],
       dialog: [],
       attachments: [],
-      analysis: [],
-      tags: {}
+      analysis: []
     });
 
     const vcon = Vcon.buildFromJson(json);
@@ -85,18 +87,20 @@ describe('Vcon', () => {
 
   it('should add attachments with new API', () => {
     const vcon = Vcon.buildNew();
-    const attachment = vcon.addAttachment({
-      type: 'application/pdf',
+    vcon.addAttachment({
+      purpose: 'document',
+      mediatype: 'application/pdf',
       body: 'base64EncodedContent',
       encoding: 'base64url'
     });
 
     expect(vcon.attachments.length).toBe(1);
-    expect(vcon.attachments[0].type).toBe('application/pdf');
+    expect(vcon.attachments[0].purpose).toBe('document');
+    expect(vcon.attachments[0].mediatype).toBe('application/pdf');
 
-    const foundAttachment = vcon.findAttachmentByType('application/pdf');
+    const foundAttachment = vcon.findAttachmentByPurpose('document');
     expect(foundAttachment).toBeDefined();
-    expect(foundAttachment?.type).toBe('application/pdf');
+    expect(foundAttachment?.purpose).toBe('document');
   });
 
   it('should find attachments by purpose', () => {
@@ -133,14 +137,34 @@ describe('Vcon', () => {
     expect(foundAnalysis?.type).toBe('sentiment');
   });
 
-  it('should add and get tags', () => {
+  it('should add and get tags (stored as a purpose="tags" attachment)', () => {
     const vcon = Vcon.buildNew();
 
     vcon.addTag('category', 'support');
+    vcon.addTag('priority', 'high');
 
-    expect(vcon.tags).toEqual({ category: 'support' });
+    expect(vcon.tags).toEqual({ category: 'support', priority: 'high' });
     expect(vcon.getTag('category')).toBe('support');
     expect(vcon.updated_at).toBeDefined();
+
+    // verify the on-wire shape: single attachment, purpose=tags, JSON body
+    const tagsAttachments = vcon.attachments.filter(a => a.purpose === 'tags');
+    expect(tagsAttachments.length).toBe(1);
+    const att = tagsAttachments[0];
+    expect(att.party).toBe(0);
+    expect(att.dialog).toBe(0);
+    expect(att.encoding).toBe('json');
+    expect(typeof att.body).toBe('string');
+    expect(JSON.parse(att.body as string)).toEqual({ category: 'support', priority: 'high' });
+  });
+
+  it('should round-trip tags via JSON', () => {
+    const vcon = Vcon.buildNew();
+    vcon.addTag('category', 'support');
+
+    const reloaded = Vcon.buildFromJson(vcon.toJson());
+    expect(reloaded.getTag('category')).toBe('support');
+    expect((reloaded.toDict() as any).tags).toBeUndefined();
   });
 
   it('should convert to JSON and back', () => {
@@ -225,15 +249,6 @@ describe('Vcon extensions (vcon-core-02)', () => {
     expect(vcon.amended).toEqual({ uuid: 'amended-uuid' });
   });
 
-  it('should add groups', () => {
-    const vcon = Vcon.buildNew();
-
-    vcon.addGroup({ uuid: 'group-uuid', type: 'thread' });
-    expect(vcon.group?.length).toBe(1);
-
-    vcon.addGroup('another-group-uuid');
-    expect(vcon.group?.length).toBe(2);
-  });
 });
 
 describe('Vcon with synthetic data', () => {

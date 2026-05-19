@@ -89,18 +89,18 @@ recordingDialog.addExternalData(
   'audio/wav',
   {
     filename: 'call-abc123.wav',
-    content_hash: 'sha512-4dff4ea340f0a823f15d3f4f01ab62eae0e5da579ccb851f8db9dfe84c58b2b37b89903a740e1ee172da793a6e79d560e5f7f9bd058a12a280433ed6fa46510a'
+    content_hash: 'sha512-Tf9OoDQfCoI_FdP08BqxLq4OXaV5zLhR-NvZ3-hMWLLN7iZA50Dh7hctp5Om55Vg5ff5vQWKEqKAQz7W-kZRCg=='
   }
 );
 
 // Add party history to track call events
 recordingDialog.party_history = [
-  new PartyHistory(0, 'joined', callStart).toDict(),
-  new PartyHistory(1, 'joined', new Date(callStart.getTime() + 15000)).toDict(),  // Agent joined after 15s
+  new PartyHistory(0, 'join', callStart).toDict(),
+  new PartyHistory(1, 'join', new Date(callStart.getTime() + 15000)).toDict(),    // Agent joined after 15s
   new PartyHistory(1, 'hold', new Date(callStart.getTime() + 300000)).toDict(),   // Put on hold at 5 min
-  new PartyHistory(1, 'resume', new Date(callStart.getTime() + 420000)).toDict(), // Resumed at 7 min
-  new PartyHistory(0, 'left', new Date(callStart.getTime() + callDuration * 1000)).toDict(),
-  new PartyHistory(1, 'left', new Date(callStart.getTime() + callDuration * 1000 + 2000)).toDict()
+  new PartyHistory(1, 'unhold', new Date(callStart.getTime() + 420000)).toDict(), // Resumed at 7 min
+  new PartyHistory(0, 'drop', new Date(callStart.getTime() + callDuration * 1000)).toDict(),
+  new PartyHistory(1, 'drop', new Date(callStart.getTime() + callDuration * 1000 + 2000)).toDict()
 ];
 
 vcon.addDialog(recordingDialog);
@@ -109,7 +109,10 @@ console.log('Call recording details:');
 console.log(`  Type: ${recordingDialog.type}`);
 console.log(`  Duration: ${Math.floor(callDuration / 60)}m ${callDuration % 60}s`);
 console.log(`  External URL: ${recordingDialog.url}`);
-console.log(`  Content hash: ${recordingDialog.content_hash?.substring(0, 30)}...`);
+const hashPreview = Array.isArray(recordingDialog.content_hash)
+  ? recordingDialog.content_hash[0]
+  : recordingDialog.content_hash;
+console.log(`  Content hash: ${hashPreview?.substring(0, 30)}...`);
 console.log(`  Party events: ${recordingDialog.party_history?.length}\n`);
 
 // Step 4: Add transcription analysis
@@ -217,7 +220,7 @@ console.log(JSON.stringify({
   dialog: `[${jsonOutput.dialog.length} dialog - recording type]`,
   analysis: `[${jsonOutput.analysis.length} analysis items]`,
   extensions: jsonOutput.extensions,
-  tags: jsonOutput.tags
+  tags: vcon.tags  // decoded from the purpose:"tags" attachment
 }, null, 2));
 
 console.log('\n=== Example 2 Complete ===');

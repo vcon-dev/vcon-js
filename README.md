@@ -59,42 +59,47 @@ const vcon = Vcon.buildFromJson(jsonString);
 
 ### Working with Attachments
 
-```typescript
-import { Vcon, Attachment } from 'vcon-js';
-
-const vcon = Vcon.buildNew();
-
-// Add an inline attachment
-const attachment = vcon.addAttachment({
-  type: 'application/pdf',
-  body: 'base64EncodedContent',
-  encoding: 'base64url',
-  filename: 'document.pdf'
-});
-
-// Add an external attachment
-vcon.addAttachment({
-  purpose: 'transcript',
-  url: 'https://example.com/transcript.txt',
-  content_hash: 'sha512-abc123...',
-  mediatype: 'text/plain'
-});
-
-// Find an attachment by type
-const pdfAttachment = vcon.findAttachmentByType('application/pdf');
-
-// Find an attachment by purpose
-const transcript = vcon.findAttachmentByPurpose('transcript');
-```
-
-### Working with Analysis
+Per draft-ietf-vcon-vcon-core-02 §4.5, attachments are identified by `purpose` (the legacy `type` field has been removed in v0.4.0). `party` and `dialog` indices are required; both default to `0` (vCon-level) when omitted.
 
 ```typescript
 import { Vcon } from 'vcon-js';
 
 const vcon = Vcon.buildNew();
 
-// Add inline analysis
+// Inline attachment
+vcon.addAttachment({
+  purpose: 'document',
+  mediatype: 'application/pdf',
+  body: 'base64EncodedContent',
+  encoding: 'base64url',
+  filename: 'document.pdf',
+  party: 0,
+  dialog: 0
+});
+
+// External attachment (url + content_hash both required; content_hash must
+// match sha512-<base64url-of-SHA-512>)
+vcon.addAttachment({
+  purpose: 'transcript',
+  url: 'https://example.com/transcript.txt',
+  content_hash: 'sha512-Tf9OoDQfCoI_FdP08BqxLq4OXaV5zLhR-NvZ3-hMWLLN7iZA50Dh7hctp5Om55Vg5ff5vQWKEqKAQz7W-kZRCg==',
+  mediatype: 'text/plain'
+});
+
+// Look up by purpose
+const transcript = vcon.findAttachmentByPurpose('transcript');
+```
+
+### Working with Analysis
+
+Per the spec, `analysis.body` MUST be a string. `addAnalysis` accepts an object or array and serializes it for you (forcing `encoding: "json"`); if you pass a string yourself it's stored verbatim.
+
+```typescript
+import { Vcon } from 'vcon-js';
+
+const vcon = Vcon.buildNew();
+
+// Add inline analysis (object body gets auto-stringified to JSON)
 vcon.addAnalysis({
   type: 'sentiment',
   dialog: 0,
@@ -103,8 +108,7 @@ vcon.addAnalysis({
   body: {
     score: 0.8,
     label: 'positive'
-  },
-  encoding: 'json'
+  }
 });
 
 // Add analysis with external reference
@@ -182,29 +186,20 @@ console.log(vcon.hasExtension('contact_center')); // true
 console.log(vcon.isCriticalExtension('encrypted')); // true
 ```
 
-### Working with Groups
-
-```typescript
-import { Vcon } from 'vcon-js';
-
-const vcon = Vcon.buildNew();
-
-// Add a group reference (for linking related vCons)
-vcon.addGroup({ uuid: 'conversation-thread-uuid', type: 'thread' });
-```
-
 ### Working with Tags
 
+Tags are stored as a single attachment with `purpose: "tags"`, `party: 0`, `dialog: 0`, and a JSON-string body (per the speckit Tags Convention). The `addTag` / `getTag` / `tags` API hides the encoding — there is no top-level `tags` field in the emitted JSON.
+
 ```typescript
 import { Vcon } from 'vcon-js';
 
 const vcon = Vcon.buildNew();
 
-// Add a tag
 vcon.addTag('category', 'support');
+vcon.addTag('priority', 'high');
 
-// Get a tag
-const category = vcon.getTag('category');
+vcon.getTag('category'); // 'support'
+vcon.tags;               // { category: 'support', priority: 'high' }
 ```
 
 ### Working with Party History
@@ -308,15 +303,13 @@ The main class for working with vCons.
 
 - `addParty(party: Party)`: Adds a party to the vCon
 - `addDialog(dialog: Dialog)`: Adds a dialog to the vCon
-- `addAttachment(params)`: Adds an attachment (inline or external)
-- `addAnalysis(params)`: Adds analysis data
-- `addTag(tagName, tagValue)`: Adds a tag
+- `addAttachment(params)`: Adds an attachment (inline or external). `purpose` required; `party`/`dialog` default to 0.
+- `addAnalysis(params)`: Adds analysis data. Object/array bodies are auto-serialized to a JSON string.
+- `addTag(tagName, tagValue)`: Adds a tag (writes to the `purpose: "tags"` attachment).
 - `addExtension(name)`: Adds a non-critical extension
 - `addCriticalExtension(name)`: Adds a critical extension
-- `addGroup(group)`: Adds a group reference
 - `findPartyIndex(by, val)`: Finds a party index by property
 - `findDialog(by, val)`: Finds a dialog by property
-- `findAttachmentByType(type)`: Finds an attachment by type
 - `findAttachmentByPurpose(purpose)`: Finds an attachment by purpose
 - `findAnalysisByType(type)`: Finds analysis by type
 - `hasExtension(name)`: Checks if extension is used
@@ -336,12 +329,11 @@ The main class for working with vCons.
 - `dialog`: Array of dialogs
 - `attachments`: Array of attachments
 - `analysis`: Array of analysis results
-- `tags`: Tag dictionary
+- `tags`: Decoded tag dictionary (read-through view of the `purpose: "tags"` attachment)
 - `extensions`: Non-critical extensions array
 - `critical`: Critical extensions array
-- `group`: Group references
-- `redacted`: Redaction reference
-- `amended`: Amendment reference
+- `redacted`: Redaction reference (mutually exclusive with `amended`)
+- `amended`: Amendment reference (mutually exclusive with `redacted`)
 - `meta`: Additional metadata
 
 ### Party
@@ -430,17 +422,16 @@ Attachment.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 
 #### Properties
 
-- `type?: string`: Attachment type (MIME type)
-- `purpose?: string`: Purpose/category
+- `purpose?: string`: Purpose/category (REQUIRED in core)
 - `start?: Date | string`: Reference time
-- `party?: number`: Related party index
-- `dialog?: number | number[]`: Related dialog indices
+- `party?: number`: Related party index (defaults to `0`)
+- `dialog?: number | number[]`: Related dialog index/indices (defaults to `0`)
 - `mediatype?: string`: Media type
 - `filename?: string`: Original filename
 - `body?: any`: Inline content
-- `encoding?: string`: Content encoding
-- `url?: string`: External URL
-- `content_hash?: string | string[]`: Content hash (single or array for multiple algorithms)
+- `encoding?: string`: Content encoding (`base64url`, `json`, `none`)
+- `url?: string`: External URL (requires `content_hash`)
+- `content_hash?: string | string[]`: Content hash (`sha512-<base64url>`; single or array for multiple algorithms)
 
 #### Methods
 

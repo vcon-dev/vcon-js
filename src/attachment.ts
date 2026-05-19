@@ -1,5 +1,10 @@
 import { Attachment as AttachmentType, Encoding } from './types';
 
+const SHA512_CONTENT_HASH_RE = /^sha512-[A-Za-z0-9_-]{86}={0,2}$/;
+function isValidContentHash(value: string): boolean {
+  return SHA512_CONTENT_HASH_RE.test(value);
+}
+
 /**
  * Attachment class for representing attached files in a vCon.
  * Compliant with IETF draft-ietf-vcon-vcon-core-02
@@ -8,7 +13,6 @@ export class Attachment implements Partial<AttachmentType> {
   /** Valid encodings per vcon-core-02 */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
-  type?: string;
   purpose?: string;
   start?: Date | string;
   party?: number;
@@ -22,17 +26,19 @@ export class Attachment implements Partial<AttachmentType> {
   [key: string]: any;
 
   constructor(params: Partial<AttachmentType> = {}) {
-    // Validate encoding if provided
     if (params.encoding && !Attachment.VALID_ENCODINGS.includes(params.encoding as Encoding)) {
       throw new Error(
         `Invalid encoding: ${params.encoding}. Must be one of ${Attachment.VALID_ENCODINGS.join(', ')}`
       );
     }
 
-    // Copy all properties
     Object.assign(this, params);
 
-    // Set default encoding for inline data
+    // Default party/dialog to 0 (vCon-level) when omitted — spec requires
+    // both indices on every attachment.
+    if (this.party === undefined) this.party = 0;
+    if (this.dialog === undefined) this.dialog = 0;
+
     if (params.body !== undefined && !params.encoding) {
       this.encoding = 'none';
     }
@@ -116,9 +122,20 @@ export class Attachment implements Partial<AttachmentType> {
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // Must have either type or purpose
-    if (!this.type && !this.purpose) {
-      errors.push('Attachment must have either type or purpose');
+    // Core spec requires `purpose`. The one extension exception is the
+    // lawful_basis attachment (draft-howe-vcon-lawful-basis), which uses
+    // `type: "lawful_basis"`.
+    const extType = (this as any).type;
+    const isLawfulBasisExt = extType === 'lawful_basis';
+    if (!this.purpose && !isLawfulBasisExt) {
+      errors.push('Attachment must have a purpose (or be the lawful_basis extension)');
+    }
+
+    if (this.party === undefined) {
+      errors.push('Attachment.party is required (use 0 for vCon-level)');
+    }
+    if (this.dialog === undefined) {
+      errors.push('Attachment.dialog is required (use 0 for vCon-level)');
     }
 
     // Cannot have both inline and external data
@@ -129,6 +146,21 @@ export class Attachment implements Partial<AttachmentType> {
     // Validate encoding if set
     if (this.encoding && !Attachment.VALID_ENCODINGS.includes(this.encoding as Encoding)) {
       errors.push(`Invalid encoding: ${this.encoding}. Must be one of: ${Attachment.VALID_ENCODINGS.join(', ')}`);
+    }
+
+    // External media MUST carry content_hash in spec-compliant format.
+    if (this.url !== undefined) {
+      if (this.content_hash === undefined) {
+        errors.push('Attachment with external url MUST include content_hash');
+      } else {
+        const hashes = Array.isArray(this.content_hash) ? this.content_hash : [this.content_hash];
+        const bad = hashes.filter(h => !isValidContentHash(h));
+        if (bad.length > 0) {
+          errors.push(
+            `Invalid content_hash format: ${bad.join(', ')}. Expected sha512-<base64url-of-SHA-512-digest>`
+          );
+        }
+      }
     }
 
     return {

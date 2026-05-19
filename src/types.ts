@@ -203,8 +203,13 @@ export interface Analysis {
   filename?: string;
 
   // Inline content (mutually exclusive with url/content_hash)
-  /** Analysis body content */
-  body?: Record<string, any> | any[] | string;
+  /**
+   * Analysis body content. Per draft-ietf-vcon-vcon-core-02 §4.4 the body
+   * MUST be a string; for JSON payloads, JSON.stringify the value and pair
+   * with encoding="json". `addAnalysis` does this automatically when given
+   * an object or array.
+   */
+  body?: string;
   /** Content encoding */
   encoding?: Encoding | string;
 
@@ -214,23 +219,29 @@ export interface Analysis {
   /** Content hash for externally referenced files (single or array for multiple algorithms) */
   content_hash?: string | string[];
 
-  /** Additional properties */
-  extra?: Record<string, any>;
   /** Allow additional properties for extensions */
   [key: string]: any;
 }
 
-/** Attachment object for related files */
+/**
+ * Attachment object for related files.
+ *
+ * Per draft-ietf-vcon-vcon-core-02 §4.5, core attachments use `purpose`
+ * (not `type`); `party` and `dialog` indices are REQUIRED. For vCon-level
+ * attachments where no specific party/dialog applies, use 0/0.
+ *
+ * One spec-defined exception: the `lawful_basis` extension attachment
+ * (draft-howe-vcon-lawful-basis) uses `type: "lawful_basis"`. Callers
+ * needing that shape must attach it via the catch-all index signature.
+ */
 export interface Attachment {
-  /** Attachment type/purpose (MIME type or category) */
-  type?: string;
-  /** Purpose/category of attachment */
+  /** Purpose/category of attachment (e.g. "tags", "transcript", "consent") */
   purpose?: string;
   /** Reference time */
   start?: Date | string;
-  /** Related party index */
+  /** Related party index (REQUIRED; use 0 for vCon-level) */
   party?: number;
-  /** Related dialog indices */
+  /** Related dialog index (REQUIRED; use 0 for vCon-level) */
   dialog?: number | number[];
   /** Media type */
   mediatype?: string;
@@ -249,18 +260,8 @@ export interface Attachment {
   /** Content hash for externally referenced files (single or array for multiple algorithms) */
   content_hash?: string | string[];
 
-  /** Allow additional properties for extensions */
+  /** Allow additional properties for extensions (incl. the lawful_basis `type` field) */
   [key: string]: any;
-}
-
-/** Group object for linking related vCons */
-export interface Group {
-  /** Group identifier */
-  uuid: string;
-  /** Group type/purpose */
-  type?: string;
-  /** Additional metadata */
-  meta?: Record<string, any>;
 }
 
 /** Redacted object reference per Section 4.1.8.1 */
@@ -325,8 +326,6 @@ export interface VconData {
   attachments?: Attachment[];
   /** Array of analysis results */
   analysis?: Analysis[];
-  /** Array of group references */
-  group?: Group[] | string[];
   /** Reference to redacted version */
   redacted?: Redacted | boolean;
   /** Reference to amended version */
@@ -337,9 +336,7 @@ export interface VconData {
   critical?: string[];
   /** Additional metadata */
   meta?: Record<string, any>;
-  /** Tags for classification */
-  tags?: Record<string, any>;
-  
+
   /**
    * Original signature property - kept for backward compatibility
    */

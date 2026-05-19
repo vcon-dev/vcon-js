@@ -6,7 +6,6 @@ import {
   Dialog,
   Analysis,
   Encoding,
-  Group,
   Redacted,
   Amended,
   VCON_VERSION
@@ -33,7 +32,6 @@ export class Vcon {
       dialog: vconDict.dialog || [],
       attachments: vconDict.attachments || [],
       analysis: vconDict.analysis || [],
-      tags: vconDict.tags || {},
       ...vconDict
     };
   }
@@ -58,37 +56,68 @@ export class Vcon {
     return new Vcon();
   }
 
-  // Tag methods
+  // Tag methods — per speckit, tags are stored as a single attachment with
+  // purpose="tags", party=0, dialog=0, encoding="json", and a JSON-string
+  // body. We keep an in-memory dictionary API but always read from / write
+  // through that attachment.
 
-  get tags(): Record<string, any> | undefined {
-    return this.data.tags;
+  private getTagsAttachment(): Attachment | undefined {
+    return this.data.attachments?.find(a => a.purpose === 'tags');
+  }
+
+  private decodeTags(): Record<string, any> {
+    const att = this.getTagsAttachment();
+    if (!att || typeof att.body !== 'string') return {};
+    try {
+      const parsed = JSON.parse(att.body);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  get tags(): Record<string, any> {
+    return this.decodeTags();
   }
 
   getTag(tagName: string): string | undefined {
-    return this.data.tags?.[tagName];
+    return this.decodeTags()[tagName];
   }
 
   addTag(tagName: string, tagValue: string): void {
-    if (!this.data.tags) {
-      this.data.tags = {};
+    const next = { ...this.decodeTags(), [tagName]: tagValue };
+    const serialized = JSON.stringify(next);
+
+    if (!this.data.attachments) this.data.attachments = [];
+    const existing = this.getTagsAttachment();
+    if (existing) {
+      existing.body = serialized;
+      existing.encoding = 'json';
+    } else {
+      this.data.attachments.push({
+        purpose: 'tags',
+        party: 0,
+        dialog: 0,
+        body: serialized,
+        encoding: 'json',
+        mediatype: 'application/json'
+      });
     }
-    this.data.tags[tagName] = tagValue;
     this.data.updated_at = new Date().toISOString();
   }
 
   // Attachment methods
 
-  findAttachmentByType(type: string): Attachment | undefined {
-    return this.data.attachments?.find(attachment => attachment.type === type);
-  }
-
   findAttachmentByPurpose(purpose: string): Attachment | undefined {
     return this.data.attachments?.find(attachment => attachment.purpose === purpose);
   }
 
+  /**
+   * Add an attachment. Per draft-ietf-vcon-vcon-core-02 §4.5, `purpose`,
+   * `party`, and `dialog` are required; party/dialog default to 0 when omitted.
+   */
   addAttachment(params: {
-    type?: string;
-    purpose?: string;
+    purpose: string;
     body?: any;
     encoding?: Encoding;
     url?: string;
@@ -108,13 +137,6 @@ export class Vcon {
     return attachment;
   }
 
-  /**
-   * @deprecated Use addAttachment with params object instead
-   */
-  addAttachmentLegacy(type: string, body: any, encoding: Encoding = 'none'): AttachmentClass {
-    return this.addAttachment({ type, body, encoding });
-  }
-
   // Analysis methods
 
   findAnalysisByType(type: string): Analysis | undefined {
@@ -127,18 +149,29 @@ export class Vcon {
     vendor?: string;
     product?: string;
     schema?: string;
-    body?: Record<string, any> | any[] | string;
+    body?: string | Record<string, any> | any[];
     encoding?: Encoding;
     url?: string;
     content_hash?: string | string[];
     mediatype?: string;
     filename?: string;
-    extra?: Record<string, any>;
   }): void {
-    const analysis: Analysis = { ...params };
+    // Per draft-ietf-vcon-vcon-core-02 §4.4 the analysis body MUST be a
+    // string. When callers hand us an object or array we serialize and
+    // force encoding="json" so the emitted vCon validates.
+    const { body, encoding, ...rest } = params;
+    const analysis: Analysis = { ...rest };
 
-    if (params.extra) {
-      analysis.extra = params.extra;
+    if (body !== undefined) {
+      if (typeof body === 'string') {
+        analysis.body = body;
+        if (encoding) analysis.encoding = encoding;
+      } else {
+        analysis.body = JSON.stringify(body);
+        analysis.encoding = 'json';
+      }
+    } else if (encoding) {
+      analysis.encoding = encoding;
     }
 
     if (!this.data.analysis) {
@@ -236,16 +269,6 @@ export class Vcon {
     return this.data.critical?.includes(name) ?? false;
   }
 
-  // Group methods
-
-  addGroup(group: Group | string): void {
-    if (!this.data.group) {
-      this.data.group = [];
-    }
-    (this.data.group as (Group | string)[]).push(group);
-    this.data.updated_at = new Date().toISOString();
-  }
-
   // Property getters
 
   get parties(): Party[] {
@@ -294,6 +317,9 @@ export class Vcon {
   }
 
   set redacted(value: Redacted | boolean | undefined) {
+    if (value !== undefined && this.data.amended !== undefined) {
+      throw new Error('vCon cannot set redacted while amended is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core-02 §4.1.8/§4.1.9).');
+    }
     this.data.redacted = value;
     this.data.updated_at = new Date().toISOString();
   }
@@ -303,12 +329,11 @@ export class Vcon {
   }
 
   set amended(value: Amended | boolean | undefined) {
+    if (value !== undefined && this.data.redacted !== undefined) {
+      throw new Error('vCon cannot set amended while redacted is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core-02 §4.1.8/§4.1.9).');
+    }
     this.data.amended = value;
     this.data.updated_at = new Date().toISOString();
-  }
-
-  get group(): Group[] | string[] | undefined {
-    return this.data.group;
   }
 
   get extensions(): string[] | undefined {
@@ -326,12 +351,5 @@ export class Vcon {
   set meta(value: Record<string, any> | undefined) {
     this.data.meta = value;
     this.data.updated_at = new Date().toISOString();
-  }
-
-  /**
-   * @deprecated Use amended instead (vcon-core-01 uses amended, not appended)
-   */
-  get appended(): boolean {
-    return !!this.data.amended;
   }
 }

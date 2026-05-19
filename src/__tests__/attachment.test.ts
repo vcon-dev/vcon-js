@@ -2,13 +2,15 @@ import { Attachment } from '../attachment';
 import { Encoding } from '../types';
 
 describe('Attachment', () => {
-  it('should create an attachment with type and body', () => {
+  it('should create an attachment with purpose and body', () => {
     const attachment = new Attachment({
-      type: 'application/pdf',
+      purpose: 'document',
+      mediatype: 'application/pdf',
       body: 'content'
     });
 
-    expect(attachment.type).toBe('application/pdf');
+    expect(attachment.purpose).toBe('document');
+    expect(attachment.mediatype).toBe('application/pdf');
     expect(attachment.body).toBe('content');
     expect(attachment.encoding).toBe('none');
   });
@@ -27,35 +29,44 @@ describe('Attachment', () => {
 
   it('should create an attachment with base64url encoding', () => {
     const attachment = new Attachment({
-      type: 'application/pdf',
+      purpose: 'document',
+      mediatype: 'application/pdf',
       body: 'base64urlcontent',
       encoding: 'base64url'
     });
 
-    expect(attachment.type).toBe('application/pdf');
+    expect(attachment.purpose).toBe('document');
     expect(attachment.body).toBe('base64urlcontent');
     expect(attachment.encoding).toBe('base64url');
   });
 
   it('should create an attachment with json encoding', () => {
     const attachment = new Attachment({
-      type: 'application/json',
+      purpose: 'tags',
+      mediatype: 'application/json',
       body: '{"key": "value"}',
       encoding: 'json'
     });
 
-    expect(attachment.type).toBe('application/json');
+    expect(attachment.purpose).toBe('tags');
     expect(attachment.encoding).toBe('json');
   });
 
   it('should throw error for invalid encoding', () => {
     expect(() => {
       new Attachment({
-        type: 'application/pdf',
+        purpose: 'document',
         body: 'content',
         encoding: 'base64' as Encoding // base64 is not valid, only base64url
       });
     }).toThrow('Invalid encoding: base64. Must be one of base64url, json, none');
+  });
+
+  it('should default party and dialog to 0 (vCon-level) when omitted', () => {
+    const attachment = new Attachment({ purpose: 'tags', body: '{}' });
+
+    expect(attachment.party).toBe(0);
+    expect(attachment.dialog).toBe(0);
   });
 
   it('should have valid encodings constant', () => {
@@ -63,7 +74,7 @@ describe('Attachment', () => {
   });
 
   it('should handle external data', () => {
-    const attachment = new Attachment({ type: 'image/png' });
+    const attachment = new Attachment({ purpose: 'avatar', mediatype: 'image/png' });
 
     attachment.addExternalData(
       'https://example.com/image.png',
@@ -80,7 +91,7 @@ describe('Attachment', () => {
   });
 
   it('should handle inline data', () => {
-    const attachment = new Attachment({ type: 'text/plain' });
+    const attachment = new Attachment({ purpose: 'note', mediatype: 'text/plain' });
 
     attachment.addInlineData(
       'Hello World',
@@ -99,7 +110,6 @@ describe('Attachment', () => {
   it('should support all vcon-core-02 fields', () => {
     const start = new Date('2025-01-15T10:00:00Z');
     const attachment = new Attachment({
-      type: 'document',
       purpose: 'contract',
       start,
       party: 0,
@@ -110,7 +120,6 @@ describe('Attachment', () => {
       encoding: 'base64url'
     });
 
-    expect(attachment.type).toBe('document');
     expect(attachment.purpose).toBe('contract');
     expect(attachment.start).toBe(start);
     expect(attachment.party).toBe(0);
@@ -122,7 +131,7 @@ describe('Attachment', () => {
   it('should convert to dict with ISO date strings', () => {
     const start = new Date('2025-01-15T10:00:00Z');
     const attachment = new Attachment({
-      type: 'document',
+      purpose: 'document',
       start,
       body: 'content'
     });
@@ -132,23 +141,24 @@ describe('Attachment', () => {
   });
 
   it('should validate attachment correctly', () => {
-    // Valid attachment with type
-    const validWithType = new Attachment({ type: 'document', body: 'content' });
-    expect(validWithType.validate().valid).toBe(true);
-
-    // Valid attachment with purpose
+    // Valid attachment with purpose (party/dialog default to 0)
     const validWithPurpose = new Attachment({ purpose: 'transcript', body: 'content' });
     expect(validWithPurpose.validate().valid).toBe(true);
 
-    // Invalid - no type or purpose
-    const noTypeOrPurpose = new Attachment({ body: 'content' });
-    const result1 = noTypeOrPurpose.validate();
+    // Valid lawful_basis extension attachment (the one allowed `type:` exception)
+    const lawfulBasis = new Attachment({ body: '{}' } as any);
+    (lawfulBasis as any).type = 'lawful_basis';
+    expect(lawfulBasis.validate().valid).toBe(true);
+
+    // Invalid - no purpose
+    const noPurpose = new Attachment({ body: 'content' });
+    const result1 = noPurpose.validate();
     expect(result1.valid).toBe(false);
-    expect(result1.errors).toContain('Attachment must have either type or purpose');
+    expect(result1.errors).toContain('Attachment must have a purpose (or be the lawful_basis extension)');
 
     // Invalid - both inline and external data
     const bothData = new Attachment({
-      type: 'document',
+      purpose: 'document',
       body: 'content',
       url: 'https://example.com'
     });
@@ -159,7 +169,7 @@ describe('Attachment', () => {
 
   it('should support single dialog integer', () => {
     const attachment = new Attachment({
-      type: 'document',
+      purpose: 'document',
       dialog: 0,
       body: 'content'
     });
@@ -170,7 +180,7 @@ describe('Attachment', () => {
   });
 
   it('should support array content_hash (vcon-core-02)', () => {
-    const attachment = new Attachment({ type: 'image/png' });
+    const attachment = new Attachment({ purpose: 'avatar', mediatype: 'image/png' });
 
     attachment.addExternalData(
       'https://example.com/image.png',
@@ -179,7 +189,7 @@ describe('Attachment', () => {
     );
 
     expect(attachment.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
-    
+
     const dict = attachment.toDict();
     expect(dict.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
   });

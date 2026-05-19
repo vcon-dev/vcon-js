@@ -9,6 +9,18 @@ import {
 import { PartyHistory as PartyHistoryClass } from './party';
 
 /**
+ * Matches a spec-compliant content_hash: "sha512-" + base64url-encoded
+ * SHA-512 digest. Base64url of 64 raw bytes is 86 chars; padding is optional
+ * (RFC 4648 §5 forbids '=' in URL-safe contexts, but the spec corpus and
+ * sibling libraries emit both forms, so we accept 0–2 '=' chars at the end).
+ */
+const SHA512_CONTENT_HASH_RE = /^sha512-[A-Za-z0-9_-]{86}={0,2}$/;
+
+function isValidContentHash(value: string): boolean {
+  return SHA512_CONTENT_HASH_RE.test(value);
+}
+
+/**
  * Dialog class representing a conversation segment.
  * Compliant with IETF draft-ietf-vcon-vcon-core-02
  */
@@ -249,34 +261,68 @@ export class Dialog implements Partial<DialogType> {
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // Type is required
     if (!this.type) {
       errors.push('Dialog type is required');
     }
 
-    // Start is required
     if (!this.start) {
       errors.push('Dialog start time is required');
     }
 
-    // If incomplete, disposition should be set
     if (this.type === 'incomplete' && !this.disposition) {
       errors.push('Disposition is required for incomplete dialogs');
     }
 
-    // Validate disposition value if set
     if (this.disposition && !Dialog.DISPOSITIONS.includes(this.disposition as DialogDisposition)) {
       errors.push(`Invalid disposition: ${this.disposition}. Must be one of: ${Dialog.DISPOSITIONS.join(', ')}`);
     }
 
-    // Cannot have both inline and external data
     if (this.body !== undefined && this.url !== undefined) {
       errors.push('Dialog cannot have both inline (body) and external (url) data');
     }
 
-    // Validate encoding if set
     if (this.encoding && !Dialog.VALID_ENCODINGS.includes(this.encoding as Encoding)) {
       errors.push(`Invalid encoding: ${this.encoding}. Must be one of: ${Dialog.VALID_ENCODINGS.join(', ')}`);
+    }
+
+    // External media MUST carry content_hash (spec §4.3.x) and the hash
+    // format MUST be sha512-<base64url>.
+    if (this.url !== undefined) {
+      if (this.content_hash === undefined) {
+        errors.push('Dialog with external url MUST include content_hash');
+      } else {
+        const hashes = Array.isArray(this.content_hash) ? this.content_hash : [this.content_hash];
+        const bad = hashes.filter(h => !isValidContentHash(h));
+        if (bad.length > 0) {
+          errors.push(
+            `Invalid content_hash format: ${bad.join(', ')}. Expected sha512-<base64url-of-SHA-512-digest>`
+          );
+        }
+      }
+    }
+
+    // transfer-type dialogs MUST NOT carry party-conversation fields or content
+    // (draft-ietf-vcon-vcon-core-02 §4.3 transfer subtype).
+    if (this.type === 'transfer') {
+      const forbidden: Array<keyof DialogType> = ['parties', 'originator', 'mediatype', 'filename', 'body', 'url'];
+      for (const key of forbidden) {
+        if (this[key as string] !== undefined) {
+          errors.push(`Transfer dialog MUST NOT include ${String(key)}`);
+        }
+      }
+    }
+
+    if (this.party_history) {
+      this.party_history.forEach((entry, i) => {
+        if (!PartyHistoryClass.VALID_EVENTS.includes(entry.event)) {
+          errors.push(
+            `Invalid party_history[${i}].event: ${entry.event}. Must be one of: ${PartyHistoryClass.VALID_EVENTS.join(', ')}`
+          );
+        }
+        if ((entry.event === 'keydown' || entry.event === 'keyup') && !entry.button) {
+          errors.push(`party_history[${i}]: button is required for ${entry.event} events`);
+        }
+      });
     }
 
     return {

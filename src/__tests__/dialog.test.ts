@@ -40,7 +40,7 @@ describe('Dialog', () => {
 
   it('should create a dialog with all properties', () => {
     const start = new Date();
-    const partyHistory = new PartyHistory(0, 'joined', start);
+    const partyHistory = new PartyHistory(0, 'join', start);
 
     const dialog = new Dialog({
       type: 'text',
