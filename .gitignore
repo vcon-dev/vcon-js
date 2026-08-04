@@ -61,3 +61,6 @@ docs/
 
 __pycache__/
 vcon-python
+
+# OMC local session/state artifacts
+.omc/
