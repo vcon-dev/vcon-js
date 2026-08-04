@@ -1,6 +1,6 @@
 # vcon-js
 
-A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with [IETF draft-ietf-vcon-vcon-core-02](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02).
+A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with [IETF draft-ietf-vcon-vcon-core](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core).
 
 ## Installation
 
@@ -59,7 +59,7 @@ const vcon = Vcon.buildFromJson(jsonString);
 
 ### Working with Attachments
 
-Per draft-ietf-vcon-vcon-core-02 §4.5, attachments are identified by `purpose` (the legacy `type` field has been removed in v0.4.0). `party` and `dialog` indices are required; both default to `0` (vCon-level) when omitted.
+Per draft-ietf-vcon-vcon-core §4.5, attachments are identified by `purpose` (the legacy `type` field has been removed in v0.4.0). `party` and `dialog` indices are required; both default to `0` (vCon-level) when omitted.
 
 ```typescript
 import { Vcon } from 'vcon-js';
@@ -127,7 +127,7 @@ const sentimentAnalysis = vcon.findAnalysisByType('sentiment');
 
 ### Working with Dialog Types
 
-vcon-core-02 defines four dialog types: `recording`, `text`, `transfer`, and `incomplete`.
+vcon-core defines five dialog types: `recording`, `text`, `transfer`, `incomplete`, and `recording-set`.
 
 ```typescript
 import { Dialog } from 'vcon-js';
@@ -168,7 +168,7 @@ console.log(recordingDialog.isRecording()); // true
 console.log(incompleteDialog.isIncomplete()); // true
 ```
 
-### Working with Extensions (vcon-core-02)
+### Working with Extensions (vcon-core)
 
 ```typescript
 import { Vcon } from 'vcon-js';
@@ -265,7 +265,7 @@ const emailDialog = new Dialog({
 
 ### Party Identifiers
 
-vcon-core-02 supports multiple party identifier types:
+vcon-core supports multiple party identifier types:
 
 ```typescript
 import { Party } from 'vcon-js';
@@ -361,7 +361,7 @@ Class for representing parties in a vCon.
 - `toDict()`: Converts to plain object
 - `hasIdentifier()`: Checks if party has any identifier
 - `getPrimaryIdentifier()`: Gets the primary identifier
-- `validate()`: Validates against vcon-core-02 recommendations
+- `validate()`: Validates against vcon-core recommendations
 
 ### Dialog
 
@@ -408,7 +408,7 @@ Dialog.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `isAudio()`: Checks if audio content
 - `isVideo()`: Checks if video content
 - `isEmail()`: Checks if email content
-- `validate()`: Validates against vcon-core-02
+- `validate()`: Validates against vcon-core
 
 ### Attachment
 
@@ -440,7 +440,7 @@ Attachment.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `addInlineData(body, mediatype, options?)`: Adds inline content
 - `isExternalData()`: Checks if has external data
 - `isInlineData()`: Checks if has inline data
-- `validate()`: Validates against vcon-core-02
+- `validate()`: Validates against vcon-core
 
 ### PartyHistory
 
@@ -619,17 +619,19 @@ npm run example:conference  # Video conference
 npm run examples
 ```
 
-## vcon-core-02 Compliance
+## vcon-core Compliance
 
-This library implements the [IETF draft-ietf-vcon-vcon-core-02](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02) specification, including:
+This library implements the [IETF draft-ietf-vcon-vcon-core](https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core) specification, including:
 
-- **Version**: `0.4.0` (note: the `vcon` parameter is DEPRECATED per Section 4.1.1)
-- **Dialog Types**: `recording`, `text`, `transfer`, `incomplete`
+- **Syntax parameter**: `0.4.0` (note: the `vcon` parameter is DEPRECATED per Section 4.1.1). Unchanged as the draft advanced past -02.
+- **Dialog Types**: `recording`, `text`, `transfer`, `incomplete`, `recording-set`
+- **Recording sets**: `recordings[]` on a `recording-set` dialog and `recording_set` back-reference on member recordings
 - **Dispositions**: `no-answer`, `congestion`, `failed`, `busy`, `hung-up`, `voicemail-no-message`
 - **Encodings**: `base64url`, `json`, `none`
 - **Content Hash**: SHA-512 hash format for external references (supports array for multiple algorithms)
-- **Extensions**: Support for `extensions` and `critical` arrays
-- **Party Identifiers**: tel, sip, mailto, stir, did, uuid
+- **Extensions**: `extensions`/`critical` arrays; every extension parameter round-trips untyped, with `provenance` (draft-howe-vcon-provenance) typed on dialog and analysis
+- **Analysis source**: keyed off `dialog` and/or `attachment` (`dialog` is optional; `vendor` is required)
+- **Party Identifiers**: tel, sip, mailto, stir, did, uuid; plus `type`, `org`, `dept`
 - **Date Format**: RFC3339 timestamps
 - **SessionId**: Object with `local` and `remote` UUIDs per RFC 7989
 - **PartyHistory Events**: `join`, `drop`, `hold`, `unhold`, `mute`, `unmute`, `keydown`, `keyup`
@@ -641,7 +643,7 @@ This library implements the [IETF draft-ietf-vcon-vcon-core-02](https://datatrac
 ```bash
 npm install          # Install dependencies
 npm run build        # Compile TypeScript
-npm test             # Run tests (61 tests)
+npm test             # Run tests (83 tests)
 npm run lint         # Run ESLint
 npm run format       # Format with Prettier
 ```

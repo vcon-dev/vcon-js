@@ -22,11 +22,11 @@ function isValidContentHash(value: string): boolean {
 
 /**
  * Dialog class representing a conversation segment.
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * Compliant with the current IETF vCon core draft (draft-ietf-vcon-vcon-core).
  */
 export class Dialog implements Partial<DialogType> {
-  /** Valid dialog types per vcon-core-02 */
-  static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'transfer', 'incomplete'];
+  /** Valid dialog types per the vCon core draft */
+  static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'transfer', 'incomplete', 'recording-set'];
 
   /** Valid dispositions for incomplete dialogs */
   static readonly DISPOSITIONS: DialogDisposition[] = [
@@ -59,7 +59,7 @@ export class Dialog implements Partial<DialogType> {
     'application/json'
   ];
 
-  /** Valid encodings per vcon-core-02 */
+  /** Valid encodings per vcon-core */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
   readonly type: DialogTypeEnum | string;
@@ -78,6 +78,8 @@ export class Dialog implements Partial<DialogType> {
   party_history?: PartyHistory[];
   application?: string;
   message_id?: string;
+  recordings?: number[];
+  recording_set?: number;
 
   // Legacy/extension fields
   /** @deprecated Use mediatype instead */
@@ -86,10 +88,11 @@ export class Dialog implements Partial<DialogType> {
   signature?: string;
   transferee?: number;
   transferor?: number;
-  transfer_target?: number;
-  original?: number;
-  consultation?: number;
-  target_dialog?: number;
+  transfer_target?: number | number[];
+  original?: number | number[];
+  consultation?: number | number[];
+  target_dialog?: number | number[];
+  provenance?: Record<string, any>;
   campaign?: string;
   interaction?: string;
   skill?: string;
@@ -100,7 +103,7 @@ export class Dialog implements Partial<DialogType> {
     this.type = params.type;
     this.start = params.start;
 
-    // Copy parties - can be number or number[] per vcon-core-02
+    // Copy parties - can be number or number[] per vcon-core
     if (params.parties !== undefined) {
       this.parties = params.parties;
     }
@@ -211,6 +214,13 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
+   * Check if dialog is a recording-set (a collection referencing recording dialogs)
+   */
+  isRecordingSet(): boolean {
+    return this.type === 'recording-set';
+  }
+
+  /**
    * Check if dialog is audio content
    */
   isAudio(): boolean {
@@ -256,7 +266,7 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
-   * Validate the dialog against vcon-core-02 requirements
+   * Validate the dialog against vcon-core requirements
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -302,7 +312,7 @@ export class Dialog implements Partial<DialogType> {
     }
 
     // transfer-type dialogs MUST NOT carry party-conversation fields or content
-    // (draft-ietf-vcon-vcon-core-02 §4.3 transfer subtype).
+    // (draft-ietf-vcon-vcon-core §4.3 transfer subtype).
     if (this.type === 'transfer') {
       const forbidden: Array<keyof DialogType> = ['parties', 'originator', 'mediatype', 'filename', 'body', 'url'];
       for (const key of forbidden) {

@@ -16,7 +16,7 @@ describe('Party', () => {
     });
   });
 
-  it('should create a party with all vcon-core-02 properties', () => {
+  it('should create a party with all vcon-core properties', () => {
     const civicAddress: CivicAddress = {
       country: 'US',
       a1: 'NY',
@@ -183,7 +183,7 @@ describe('PartyHistory', () => {
     expect(history.time).toBe('2025-01-15T11:00:00Z');
   });
 
-  it('should support all valid event types per vcon-core-02', () => {
+  it('should support all valid event types per vcon-core', () => {
     const events = ['join', 'drop', 'hold', 'unhold', 'mute', 'unmute', 'keydown', 'keyup'];
 
     expect(PartyHistory.VALID_EVENTS).toEqual(events);
@@ -194,7 +194,7 @@ describe('PartyHistory', () => {
     });
   });
 
-  it('should support button parameter for DTMF events (vcon-core-02)', () => {
+  it('should support button parameter for DTMF events (vcon-core)', () => {
     const time = new Date('2025-01-15T10:00:00Z');
     const keydownHistory = new PartyHistory(0, 'keydown', time, '5');
 

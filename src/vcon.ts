@@ -17,7 +17,7 @@ import * as crypto from 'crypto';
 
 /**
  * Main Vcon class for creating and managing vCon conversation containers.
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * Compliant with IETF draft-ietf-vcon-vcon-core
  */
 export class Vcon {
   data: VconData;
@@ -113,7 +113,7 @@ export class Vcon {
   }
 
   /**
-   * Add an attachment. Per draft-ietf-vcon-vcon-core-02 §4.5, `purpose`,
+   * Add an attachment. Per draft-ietf-vcon-vcon-core §4.5, `purpose`,
    * `party`, and `dialog` are required; party/dialog default to 0 when omitted.
    */
   addAttachment(params: {
@@ -145,7 +145,10 @@ export class Vcon {
 
   addAnalysis(params: {
     type: string;
-    dialog: number | number[];
+    /** Dialog index/indices; optional when the analysis keys off `attachment` */
+    dialog?: number | number[];
+    /** Attachment index/indices the analysis is based on */
+    attachment?: number | number[];
     vendor?: string;
     product?: string;
     schema?: string;
@@ -155,8 +158,9 @@ export class Vcon {
     content_hash?: string | string[];
     mediatype?: string;
     filename?: string;
+    provenance?: Record<string, any>;
   }): void {
-    // Per draft-ietf-vcon-vcon-core-02 §4.4 the analysis body MUST be a
+    // Per draft-ietf-vcon-vcon-core §4.4 the analysis body MUST be a
     // string. When callers hand us an object or array we serialize and
     // force encoding="json" so the emitted vCon validates.
     const { body, encoding, ...rest } = params;
@@ -318,7 +322,7 @@ export class Vcon {
 
   set redacted(value: Redacted | boolean | undefined) {
     if (value !== undefined && this.data.amended !== undefined) {
-      throw new Error('vCon cannot set redacted while amended is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core-02 §4.1.8/§4.1.9).');
+      throw new Error('vCon cannot set redacted while amended is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core §4.1.8/§4.1.9).');
     }
     this.data.redacted = value;
     this.data.updated_at = new Date().toISOString();
@@ -330,7 +334,7 @@ export class Vcon {
 
   set amended(value: Amended | boolean | undefined) {
     if (value !== undefined && this.data.redacted !== undefined) {
-      throw new Error('vCon cannot set amended while redacted is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core-02 §4.1.8/§4.1.9).');
+      throw new Error('vCon cannot set amended while redacted is set; the two are mutually exclusive (draft-ietf-vcon-vcon-core §4.1.8/§4.1.9).');
     }
     this.data.amended = value;
     this.data.updated_at = new Date().toISOString();

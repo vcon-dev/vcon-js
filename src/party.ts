@@ -2,7 +2,7 @@ import { Party as PartyType, CivicAddress, PartyHistory as PartyHistoryType } fr
 
 /**
  * Party class representing a conversation participant.
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * Compliant with IETF draft-ietf-vcon-vcon-core
  */
 export class Party implements PartyType {
   tel?: string;
@@ -56,7 +56,7 @@ export class Party implements PartyType {
   }
 
   /**
-   * Validate the party against vcon-core-02 recommendations
+   * Validate the party against vcon-core recommendations
    */
   validate(): { valid: boolean; warnings: string[] } {
     const warnings: string[] = [];
@@ -75,10 +75,10 @@ export class Party implements PartyType {
 
 /**
  * PartyHistory class for tracking party state changes within a dialog.
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * Compliant with IETF draft-ietf-vcon-vcon-core
  */
 export class PartyHistory implements PartyHistoryType {
-  /** Valid party history events per vcon-core-02 Section 4.3.11.1 */
+  /** Valid party history events per vcon-core Section 4.3.11.1 */
   static readonly VALID_EVENTS = [
     'join',
     'drop',
