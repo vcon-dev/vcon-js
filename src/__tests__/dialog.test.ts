@@ -138,7 +138,7 @@ describe('Dialog', () => {
     expect(dialog.url).toBeUndefined();
   });
 
-  it('should check dialog types per vcon-core-02', () => {
+  it('should check dialog types per vcon-core', () => {
     const textDialog = new Dialog({
       type: 'text',
       start: new Date(),
@@ -227,7 +227,7 @@ describe('Dialog', () => {
   });
 
   it('should have valid dialog types constant', () => {
-    expect(Dialog.DIALOG_TYPES).toEqual(['recording', 'text', 'transfer', 'incomplete']);
+    expect(Dialog.DIALOG_TYPES).toEqual(['recording', 'text', 'transfer', 'incomplete', 'recording-set']);
   });
 
   it('should have valid dispositions constant', () => {
@@ -256,7 +256,7 @@ describe('Dialog', () => {
     expect(dialog.mediatype).toBe('text/plain');
   });
 
-  it('should support single party integer per vcon-core-02', () => {
+  it('should support single party integer per vcon-core', () => {
     const dialog = new Dialog({
       type: 'text',
       start: new Date(),
@@ -268,7 +268,7 @@ describe('Dialog', () => {
     expect(dict.parties).toBe(0);
   });
 
-  it('should support message_id parameter (vcon-core-02)', () => {
+  it('should support message_id parameter (vcon-core)', () => {
     const dialog = new Dialog({
       type: 'text',
       start: new Date(),
@@ -284,7 +284,7 @@ describe('Dialog', () => {
     expect(dict.message_id).toBe('<abc123@example.com>');
   });
 
-  it('should support array content_hash (vcon-core-02)', () => {
+  it('should support array content_hash (vcon-core)', () => {
     const dialog = new Dialog({
       type: 'recording',
       start: new Date(),
@@ -303,7 +303,7 @@ describe('Dialog', () => {
     expect(dict.content_hash).toEqual(['sha512-abc123', 'sha256-def456']);
   });
 
-  it('should support SessionId with local and remote (vcon-core-02)', () => {
+  it('should support SessionId with local and remote (vcon-core)', () => {
     const dialog = new Dialog({
       type: 'recording',
       start: new Date(),

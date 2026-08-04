@@ -19,7 +19,7 @@ describe('Vcon', () => {
     expect(vcon.analysis).toEqual([]);
     expect(vcon.tags).toEqual({});
     // tags are NOT stored as a top-level field — they live in a
-    // purpose="tags" attachment per draft-ietf-vcon-vcon-core-02.
+    // purpose="tags" attachment per draft-ietf-vcon-vcon-core.
     expect((vcon.toDict() as any).tags).toBeUndefined();
   });
 
@@ -202,7 +202,7 @@ describe('Vcon', () => {
   });
 });
 
-describe('Vcon extensions (vcon-core-02)', () => {
+describe('Vcon extensions (vcon-core)', () => {
   it('should add and check extensions', () => {
     const vcon = Vcon.buildNew();
 
@@ -318,7 +318,7 @@ describe('Vcon with synthetic data', () => {
   });
 });
 
-describe('Vcon analysis with vcon-core-02 fields', () => {
+describe('Vcon analysis with vcon-core fields', () => {
   it('should add analysis with product and schema', () => {
     const vcon = Vcon.buildNew();
 
@@ -356,7 +356,7 @@ describe('Vcon analysis with vcon-core-02 fields', () => {
     expect(vcon.analysis[0].content_hash).toBe('sha512-abc123xyz');
   });
 
-  it('should add analysis with array content_hash (vcon-core-02)', () => {
+  it('should add analysis with array content_hash (vcon-core)', () => {
     const vcon = Vcon.buildNew();
 
     vcon.addAnalysis({
@@ -372,12 +372,12 @@ describe('Vcon analysis with vcon-core-02 fields', () => {
   });
 });
 
-describe('Vcon vcon-core-02 specific features', () => {
+describe('Vcon vcon-core specific features', () => {
   it('should have VCON_VERSION as 0.4.0', () => {
     expect(VCON_VERSION).toBe('0.4.0');
   });
 
-  it('should handle redacted with type and content_hash (vcon-core-02)', () => {
+  it('should handle redacted with type and content_hash (vcon-core)', () => {
     const vcon = Vcon.buildNew();
     
     vcon.redacted = { 
@@ -395,7 +395,7 @@ describe('Vcon vcon-core-02 specific features', () => {
     });
   });
 
-  it('should handle amended with url and content_hash (vcon-core-02)', () => {
+  it('should handle amended with url and content_hash (vcon-core)', () => {
     const vcon = Vcon.buildNew();
     
     vcon.amended = { 

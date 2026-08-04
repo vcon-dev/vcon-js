@@ -107,7 +107,7 @@ describe('Attachment', () => {
     expect(attachment.encoding).toBe('none');
   });
 
-  it('should support all vcon-core-02 fields', () => {
+  it('should support all vcon-core fields', () => {
     const start = new Date('2025-01-15T10:00:00Z');
     const attachment = new Attachment({
       purpose: 'contract',
@@ -179,7 +179,7 @@ describe('Attachment', () => {
     expect(dict.dialog).toBe(0);
   });
 
-  it('should support array content_hash (vcon-core-02)', () => {
+  it('should support array content_hash (vcon-core)', () => {
     const attachment = new Attachment({ purpose: 'avatar', mediatype: 'image/png' });
 
     attachment.addExternalData(

@@ -1,14 +1,16 @@
 /**
  * vCon Type Definitions
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
- * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core-02
+ * Compliant with the current IETF vCon core draft (draft-ietf-vcon-vcon-core,
+ * -latest; syntax parameter "0.4.0"). Tracks the authoritative
+ * vcon_json_schema.json in the draft repo.
+ * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core
  */
 
 /** Valid encoding types for inline content */
 export type Encoding = 'base64url' | 'json' | 'none';
 
-/** Dialog types as defined in vcon-core-02 */
-export type DialogType = 'recording' | 'text' | 'transfer' | 'incomplete';
+/** Dialog types as defined in the vCon core draft (incl. recording-set) */
+export type DialogType = 'recording' | 'text' | 'transfer' | 'incomplete' | 'recording-set';
 
 /** Disposition values for incomplete dialogs */
 export type DialogDisposition = 'no-answer' | 'congestion' | 'failed' | 'busy' | 'hung-up' | 'voicemail-no-message';
@@ -103,6 +105,12 @@ export interface Party {
   civicaddress?: CivicAddress;
   /** Location timezone */
   timezone?: string;
+  /** Participant type (schema-defined free-form token) */
+  type?: string;
+  /** Organization the party belongs to */
+  org?: string;
+  /** Department the party belongs to */
+  dept?: string;
   /** Role in conversation (e.g., 'agent', 'contact', 'customer') */
   role?: string;
   /** Contact list reference */
@@ -117,7 +125,7 @@ export interface Party {
 
 /** Dialog object representing a conversation segment */
 export interface Dialog {
-  /** Dialog type: 'recording', 'text', 'transfer', or 'incomplete' */
+  /** Dialog type: 'recording', 'text', 'transfer', 'incomplete', or 'recording-set' */
   type: DialogType | string;
   /** Start time of dialog segment (RFC3339 format) */
   start: Date | string;
@@ -141,6 +149,10 @@ export interface Dialog {
   application?: string;
   /** Message identifier for cross-referencing (e.g., SMTP message-id) */
   message_id?: string;
+  /** recording-set: indices of the recording Dialog Objects in this set */
+  recordings?: number[];
+  /** Index of the recording-set Dialog Object this recording belongs to */
+  recording_set?: number;
 
   // Inline content (mutually exclusive with url/content_hash)
   /** Inline content body */
@@ -165,14 +177,16 @@ export interface Dialog {
   transferee?: number;
   /** Transfer source party index */
   transferor?: number;
-  /** Transfer target reference */
-  transfer_target?: number;
-  /** Original dialog reference */
-  original?: number;
-  /** Consultation dialog reference */
-  consultation?: number;
-  /** Target dialog reference */
-  target_dialog?: number;
+  /** Transfer target party index/indices */
+  transfer_target?: number | number[];
+  /** Original dialog index/indices */
+  original?: number | number[];
+  /** Consultation dialog index/indices */
+  consultation?: number | number[];
+  /** Target dialog index/indices */
+  target_dialog?: number | number[];
+  /** Generation provenance (draft-howe-vcon-provenance) for machine-generated dialog */
+  provenance?: Record<string, any>;
   /** Campaign identifier (contact center extension) */
   campaign?: string;
   /** Interaction identifier (contact center extension) */
@@ -189,9 +203,11 @@ export interface Dialog {
 export interface Analysis {
   /** Analysis type identifier (e.g., report, sentiment, summary, transcript, translation, tts) */
   type: string;
-  /** Dialog indices analyzed */
-  dialog: number | number[];
-  /** Vendor name */
+  /** Dialog index/indices analyzed (optional; analysis may key off `attachment` instead) */
+  dialog?: number | number[];
+  /** Attachment index/indices this analysis is based on */
+  attachment?: number | number[];
+  /** Vendor name (REQUIRED per core schema) */
   vendor?: string;
   /** Product name */
   product?: string;
@@ -204,7 +220,7 @@ export interface Analysis {
 
   // Inline content (mutually exclusive with url/content_hash)
   /**
-   * Analysis body content. Per draft-ietf-vcon-vcon-core-02 §4.4 the body
+   * Analysis body content. Per draft-ietf-vcon-vcon-core §4.4 the body
    * MUST be a string; for JSON payloads, JSON.stringify the value and pair
    * with encoding="json". `addAnalysis` does this automatically when given
    * an object or array.
@@ -219,14 +235,22 @@ export interface Analysis {
   /** Content hash for externally referenced files (single or array for multiple algorithms) */
   content_hash?: string | string[];
 
-  /** Allow additional properties for extensions */
+  /** Generation provenance (draft-howe-vcon-provenance) describing the model call */
+  provenance?: Record<string, any>;
+
+  /**
+   * Allow additional properties for extensions. Every extension parameter
+   * (lawful_basis, wtf, sip-signaling, lifecycle, etc.) round-trips through
+   * this catch-all untyped; only params registered directly on core objects
+   * (e.g. `provenance`) are given named fields above.
+   */
   [key: string]: any;
 }
 
 /**
  * Attachment object for related files.
  *
- * Per draft-ietf-vcon-vcon-core-02 §4.5, core attachments use `purpose`
+ * Per draft-ietf-vcon-vcon-core §4.5, core attachments use `purpose`
  * (not `type`); `party` and `dialog` indices are REQUIRED. For vCon-level
  * attachments where no specific party/dialog applies, use 0/0.
  *
@@ -358,5 +382,5 @@ export interface VconData {
   payload?: string;
 }
 
-/** vCon version constant for vcon-core-02 (note: vcon parameter is DEPRECATED per Section 4.1.1) */
+/** vCon version constant for vcon-core (note: vcon parameter is DEPRECATED per Section 4.1.1) */
 export const VCON_VERSION = '0.4.0';

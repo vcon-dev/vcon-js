@@ -1,6 +1,6 @@
 # vcon-js
 
-A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with IETF draft-ietf-vcon-vcon-core-02.
+A JavaScript/TypeScript library for creating and managing vCons (Virtual Conversations), compliant with IETF draft-ietf-vcon-vcon-core.
 
 ## Project Overview
 
@@ -10,7 +10,7 @@ This library provides a complete implementation of the vCon specification for Ja
 
 ```
 src/
-├── types.ts        # TypeScript type definitions for vcon-core-02
+├── types.ts        # TypeScript type definitions for vcon-core
 ├── vcon.ts         # Main Vcon class for managing conversation containers
 ├── party.ts        # Party and PartyHistory classes
 ├── dialog.ts       # Dialog class for conversation segments
@@ -36,16 +36,16 @@ The main container class. Use `Vcon.buildNew()` to create a new vCon or `Vcon.bu
 Represents conversation participants with identifiers (tel, sip, mailto, stir, did, uuid) and metadata.
 
 ### Dialog
-Represents conversation segments. Four types per vcon-core-02: `recording`, `text`, `transfer`, `incomplete`.
+Represents conversation segments. Five types per vcon-core: `recording`, `text`, `transfer`, `incomplete`, `recording-set`.
 
 ### Attachment
 Represents attached files. Can be inline (body/encoding) or external (url/content_hash).
 
-## vcon-core-02 Compliance
+## vcon-core Compliance
 
-The library implements draft-ietf-vcon-vcon-core-02 (syntax `"0.4.0"`):
+The library implements draft-ietf-vcon-vcon-core (syntax `"0.4.0"`):
 
-- **Dialog types**: recording, text, transfer, incomplete
+- **Dialog types**: recording, text, transfer, incomplete, recording-set
 - **Dispositions** (for incomplete): no-answer, congestion, failed, busy, hung-up, voicemail-no-message
 - **Encodings**: base64url, json, none (note: base64 is NOT valid per spec)
 - **Extensions**: support for `extensions` and `critical` arrays
@@ -66,7 +66,7 @@ The library implements draft-ietf-vcon-vcon-core-02 (syntax `"0.4.0"`):
 ```bash
 npm install          # Install dependencies
 npm run build        # Compile TypeScript to dist/
-npm test             # Run Jest tests (61 tests)
+npm test             # Run Jest tests (83 tests)
 npm run lint         # Run ESLint
 npm run format       # Format with Prettier
 
@@ -93,9 +93,9 @@ Tests use Jest with ts-jest preset. Synthetic test vCons in `test-vcons/` direct
 
 1. **Date handling**: Dates are stored as ISO strings (RFC3339) in serialized output, but can be passed as Date objects or strings to constructors.
 
-2. **Encoding validation**: Only `base64url`, `json`, and `none` are valid encodings per vcon-core-02. The older `base64` is not supported.
+2. **Encoding validation**: Only `base64url`, `json`, and `none` are valid encodings per vcon-core. The older `base64` is not supported.
 
-3. **parties field**: Can be a single integer or array of integers per vcon-core-02.
+3. **parties field**: Can be a single integer or array of integers per vcon-core.
 
 4. **created_at is immutable**: Once set, should not be changed. Use `updated_at` to track modifications.
 

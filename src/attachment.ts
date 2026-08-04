@@ -7,10 +7,10 @@ function isValidContentHash(value: string): boolean {
 
 /**
  * Attachment class for representing attached files in a vCon.
- * Compliant with IETF draft-ietf-vcon-vcon-core-02
+ * Compliant with IETF draft-ietf-vcon-vcon-core
  */
 export class Attachment implements Partial<AttachmentType> {
-  /** Valid encodings per vcon-core-02 */
+  /** Valid encodings per vcon-core */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
   purpose?: string;
@@ -117,7 +117,7 @@ export class Attachment implements Partial<AttachmentType> {
   }
 
   /**
-   * Validate the attachment against vcon-core-02 requirements
+   * Validate the attachment against vcon-core requirements
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
