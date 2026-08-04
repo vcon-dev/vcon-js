@@ -43,6 +43,6 @@
   "dependencies": {
     "jose": "^6.0.10",
     "jsonwebtoken": "^9.0.2",
-    "uuid": "^9.0.1"
+    "uuid": "^11.1.1"
   }
 }
