@@ -13,7 +13,6 @@ import {
 import { Attachment as AttachmentClass } from './attachment';
 import { Party as PartyClass } from './party';
 import { Dialog as DialogClass } from './dialog';
-import * as crypto from 'crypto';
 
 /**
  * Main Vcon class for creating and managing vCon conversation containers.
@@ -93,9 +92,13 @@ export class Vcon {
     if (existing) {
       existing.body = serialized;
       existing.encoding = 'json';
+      // Backfill start on a legacy tags attachment that predates this field.
+      if (existing.start === undefined) existing.start = new Date().toISOString();
     } else {
       this.data.attachments.push({
         purpose: 'tags',
+        // `start` is REQUIRED on every attachment per the core schema.
+        start: new Date().toISOString(),
         party: 0,
         dialog: 0,
         body: serialized,

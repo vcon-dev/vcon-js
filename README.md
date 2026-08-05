@@ -168,6 +168,37 @@ console.log(recordingDialog.isRecording()); // true
 console.log(incompleteDialog.isIncomplete()); // true
 ```
 
+### Recording sets, attachment-based analysis, provenance
+
+Additions tracking the current core draft:
+
+```typescript
+import { Vcon, Dialog } from 'vcon-js';
+
+const vcon = Vcon.buildNew();
+
+// A recording-set groups member recording dialogs by index
+vcon.addDialog(new Dialog({ type: 'recording-set', start: new Date(), recordings: [1, 2] }));
+vcon.addDialog(new Dialog({ type: 'recording', start: new Date(), parties: [0], recording_set: 0,
+  url: 'https://example.com/a.wav', content_hash: 'sha512-...' }));
+
+// Analysis can key off an attachment instead of a dialog (dialog is optional)
+vcon.addAnalysis({ type: 'summary', attachment: 0, vendor: 'acme', body: { text: 'hi' } });
+
+// Generation provenance (draft-howe-vcon-provenance) on machine-generated dialog or analysis
+vcon.addAnalysis({ type: 'summary', dialog: 0, vendor: 'acme',
+  provenance: { model: 'gpt-4', provider: 'openai', temperature: 0.2 } });
+```
+
+Every other extension parameter round-trips untyped via a catch-all, so you can attach any
+extension's fields without a typed helper.
+
+### Signing
+
+vcon-js does not bundle a signing implementation. It emits the unsigned vCon form; wrap it in
+JWS/JWE yourself with a library of your choice (e.g. `jose`). `jose` and `jsonwebtoken` are no
+longer dependencies.
+
 ### Working with Extensions (vcon-core)
 
 ```typescript

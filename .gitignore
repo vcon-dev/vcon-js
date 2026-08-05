@@ -64,3 +64,6 @@ vcon-python
 
 # OMC local session/state artifacts
 .omc/
+
+# planning working docs
+tasks/
