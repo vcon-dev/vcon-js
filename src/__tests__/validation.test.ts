@@ -1,3 +1,4 @@
+import { Vcon } from '../vcon';
 import { Dialog } from '../dialog';
 import { Attachment } from '../attachment';
 import { PartyHistory } from '../party';
@@ -65,5 +66,27 @@ describe('Attachment.validate error branches', () => {
   it('rejects external url without content_hash', () => {
     const r = new Attachment({ purpose: 'transcript', party: 0, dialog: 0, url: 'https://x/t.txt' }).validate();
     expect(r.errors.some(e => /MUST include content_hash/.test(e))).toBe(true);
+  });
+
+  it('throws on an invalid encoding at construction', () => {
+    expect(() => new Attachment({ purpose: 'x', encoding: 'base64' as any })).toThrow(/Invalid encoding/);
+  });
+});
+
+describe('Vcon guards', () => {
+  it('throws parsing invalid JSON', () => {
+    expect(() => Vcon.buildFromJson('{not json')).toThrow(/Failed to parse vCon JSON/);
+  });
+
+  it('throws when setting redacted while amended is set', () => {
+    const v = Vcon.buildNew();
+    v.amended = { uuid: '550e8400-e29b-41d4-a716-446655440000' };
+    expect(() => { v.redacted = { type: 'pii' }; }).toThrow(/mutually exclusive/);
+  });
+
+  it('throws when setting amended while redacted is set', () => {
+    const v = Vcon.buildNew();
+    v.redacted = { type: 'pii' };
+    expect(() => { v.amended = { uuid: '550e8400-e29b-41d4-a716-446655440000' }; }).toThrow(/mutually exclusive/);
   });
 });

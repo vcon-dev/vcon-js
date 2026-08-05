@@ -69,7 +69,6 @@ vcon.addParty(customer);
 vcon.addParty(agent);
 
 // Get file information
-const fileStats = fs.statSync(inputWavFile);
 const fileName = path.basename(inputWavFile);
 const fileExtension = path.extname(fileName).toLowerCase();
 

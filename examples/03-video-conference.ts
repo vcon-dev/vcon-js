@@ -14,7 +14,7 @@
  * - Amendment and redaction references
  */
 
-import { Vcon, Party, Dialog, Attachment } from '../src';
+import { Vcon, Party, Dialog } from '../src';
 
 console.log('=== Example 3: Video Conference with Attachments ===\n');
 

@@ -310,27 +310,6 @@ export interface Amended {
   content_hash?: string | string[];
 }
 
-/**
- * Interface for JWS signature components according to the vCon specification.
- * Used in the signatures array of a signed vCon.
- */
-export interface Signature {
-  /**
-   * The protected header in base64url encoding
-   */
-  protected: string;
-  
-  /**
-   * The JWS signature in base64url encoding
-   */
-  signature: string;
-  
-  /**
-   * Optional unprotected header
-   */
-  header?: Record<string, any>;
-}
-
 export interface VconData {
   /** Globally unique identifier (preferably UUID v8) */
   uuid?: string;
@@ -360,26 +339,6 @@ export interface VconData {
   critical?: string[];
   /** Additional metadata */
   meta?: Record<string, any>;
-
-  /**
-   * Original signature property - kept for backward compatibility
-   */
-  signature?: {
-    alg: string;
-    signature: string;
-  };
-  
-  /**
-   * JWS signature array according to the JWS JSON Serialization
-   * Added when a vCon is signed using the sign() method
-   */
-  signatures?: Signature[];
-  
-  /**
-   * Base64url encoded payload containing the original vCon data
-   * Added when a vCon is signed using the sign() method
-   */
-  payload?: string;
 }
 
 /** vCon version constant for vcon-core (note: vcon parameter is DEPRECATED per Section 4.1.1) */

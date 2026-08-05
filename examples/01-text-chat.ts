@@ -58,7 +58,7 @@ const conversationMessages = [
 
 // Add each message as a dialog
 let messageTime = new Date();
-conversationMessages.forEach((msg, index) => {
+conversationMessages.forEach((msg) => {
   const dialog = new Dialog({
     type: 'text',
     start: messageTime.toISOString(),

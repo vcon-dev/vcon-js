@@ -1,9 +1,8 @@
 import { Vcon } from '../vcon';
 import { Party } from '../party';
 import { Dialog } from '../dialog';
-import { Attachment } from '../attachment';
 import { VCON_VERSION } from '../types';
-import { loadTestVcon, getAllTestVcons, getTestVconsByDirectory } from './utils';
+import { getAllTestVcons, getTestVconsByDirectory } from './utils';
 
 describe('Vcon', () => {
   it('should create a new vCon with default values', () => {
