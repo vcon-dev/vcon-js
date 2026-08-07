@@ -6,7 +6,7 @@ All notable changes to `vcon-js` are documented here. Format follows
 
 The `vcon` syntax parameter is `"0.4.0"` and is independent of the package version.
 
-## [Unreleased] — 0.5.2
+## [0.5.2] — 2026-08-06
 
 ### Fixed
 - `addTag()` now stamps the schema-required `start` on the `purpose: "tags"` attachment.
@@ -75,7 +75,7 @@ Type-level move toward core-02 (later found incomplete; see 0.4.0).
 - `PartyHistory` gained `button` (DTMF); `Dialog` gained `message_id`; `Redacted`/`Amended` gained
   `type` / `url` / `content_hash`.
 
-[Unreleased]: https://github.com/vcon-dev/vcon-js/compare/v0.5.1...HEAD
+[0.5.2]: https://github.com/vcon-dev/vcon-js/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/vcon-dev/vcon-js/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/vcon-dev/vcon-js/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/vcon-dev/vcon-js/compare/v0.3.0...v0.4.0
