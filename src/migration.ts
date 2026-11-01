@@ -28,7 +28,16 @@
  */
 import { EVENT_PARAMETERS } from './event';
 import { DIALOG_MIME_TYPES, extensionsInUse, validateVconDict } from './validation';
-import { base64UrlDecodeToString, clone, isInt, isPlainObject, parseDateTime, repr, reprList } from './util';
+import {
+  base64UrlDecodeToString,
+  clone,
+  isInt,
+  isPlainObject,
+  parseDateTime,
+  parseDateTimeMicros,
+  repr,
+  reprList
+} from './util';
 
 export const SOURCE_VERSION = '0.4.0';
 export const TARGET_VERSION = '0.5.0';
@@ -154,8 +163,54 @@ export interface MigrationResult {
 const ok = (v: unknown): boolean => parseDateTime(v) !== undefined;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-function num(seconds: number): number {
-  return Math.round(seconds * 1e6) / 1e6;
+/**
+ * Round seconds to six decimals the way the Python reference's round(x, 6)
+ * does: on the exact binary value, ties to even. Math.round(x * 1e6) / 1e6
+ * rounds x * 1e6 (already inexact) and breaks ties upwards, so it disagrees
+ * with the reference on values such as 0.0078125.
+ */
+export function num(seconds: number): number {
+  if (!Number.isFinite(seconds)) return seconds;
+  const sign = seconds < 0 ? -1 : 1;
+  const [ip, fp] = Math.abs(seconds).toFixed(100).split('.');
+  const keep = fp.slice(0, 6);
+  const rest = fp.slice(6);
+  const up = rest[0] > '5' || (rest[0] === '5' && (/[1-9]/.test(rest.slice(1)) || Number(keep[5]) % 2 === 1));
+  const digits = (BigInt(ip + keep) + (up ? 1n : 0n)).toString().padStart(7, '0');
+  const value = Number(`${digits.slice(0, -6)}.${digits.slice(-6)}`);
+  return value === 0 ? 0 : sign * value;
+}
+
+/** Epoch seconds (with microseconds) of a date-time string, as Python's datetime.timestamp() gives. */
+const seconds = (v: unknown): number | undefined => {
+  const us = parseDateTimeMicros(v);
+  return us === undefined ? undefined : us / 1e6;
+};
+
+/** Round half to even to an integer (Python's rounding of a float to microseconds). */
+function roundHalfEven(x: number): number {
+  const r = Math.round(x);
+  return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+/**
+ * The string Python's datetime.fromtimestamp(t, tz=timezone.utc).isoformat()
+ * gives for epoch seconds t: microsecond precision (rounded half to even),
+ * the fraction omitted when it is zero, and "+00:00" as the offset. Matching
+ * it keeps a derived Event time identical across implementations.
+ */
+export function isoFromSeconds(t: number): string {
+  let whole = Math.trunc(t);
+  let us = roundHalfEven((t - whole) * 1e6);
+  if (us >= 1e6) {
+    whole += 1;
+    us -= 1e6;
+  } else if (us < 0) {
+    whole -= 1;
+    us += 1e6;
+  }
+  const base = new Date(whole * 1000).toISOString().slice(0, 19);
+  return base + (us ? '.' + String(us).padStart(6, '0') : '') + '+00:00';
 }
 
 /** Flat list of int party indices of a 0.4.0 Dialog `parties` value. */
@@ -279,7 +334,7 @@ class Context {
         .map((r: number) => this.dialogs[r].start)
         .filter(ok);
       if (starts.length) {
-        return starts.reduce((a: string, b: string) => (parseDateTime(b)! < parseDateTime(a)! ? b : a));
+        return starts.reduce((a: string, b: string) => (seconds(b)! < seconds(a)! ? b : a));
       }
     }
     return undefined;
@@ -296,7 +351,7 @@ class Context {
     const items: Array<[number, number]> = [];
     for (const i of idxs) {
       if (!isPlainObject(this.dialogs[i])) continue;
-      const s = parseDateTime(this.dialogs[i].start);
+      const s = seconds(this.dialogs[i].start);
       if (s !== undefined) items.push([i, s]);
     }
     if (!items.length) return [undefined, undefined];
@@ -308,13 +363,13 @@ class Context {
       const dur = this.dialogs[i].duration;
       if (isNum(dur)) {
         anyDuration = true;
-        ends.push(s / 1000 + dur);
+        ends.push(s + dur);
       } else {
-        ends.push(s / 1000);
+        ends.push(s);
       }
     }
     if (!anyDuration) return [startStr, undefined];
-    return [startStr, num(Math.max(...ends) - first / 1000)];
+    return [startStr, num(Math.max(...ends) - first)];
   }
 
   /** Build a Session for a group of kept Dialogs from derived values. */
@@ -655,10 +710,10 @@ function stepT4Transfers(ctx: Context): void {
         cands.push([ctx.dialogStart(targetRef), `start of target dialog[${targetRef}]`]);
         if (hasCons) {
           const cd = isInt(consRef) && consRef >= 0 && consRef < ctx.dialogs.length ? ctx.dialogs[consRef] : undefined;
-          const cs = parseDateTime(ctx.dialogStart(consRef));
+          const cs = seconds(ctx.dialogStart(consRef));
           const dur = isPlainObject(cd) ? cd.duration : undefined;
           if (cs !== undefined && isNum(dur)) {
-            const end = new Date(cs + dur * 1000).toISOString();
+            const end = isoFromSeconds(cs + dur);
             cands.push([end, `end of consultation dialog[${consRef}] (start + duration)`]);
           }
           cands.push([ctx.dialogStart(consRef), `start of consultation dialog[${consRef}]`]);

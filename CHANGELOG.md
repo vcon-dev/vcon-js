@@ -88,6 +88,10 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
 - `Dialog.validate()` rejects unknown Dialog types, content on an `incomplete` Dialog and media
   types outside the known set (text, message and multipart subtypes are accepted).
 - The vendored test schema is now the core-05 Appendix C schema (was the `0.4.0` schema).
+- Date-time parsing rejects out-of-range fields (February 30, hour 24, offset of 24 hours)
+  instead of rolling them over, and keeps microseconds. `migrate040To050` derives Session start
+  and duration, and a consultation-end Event time, with microsecond precision and the reference's
+  rounding and formatting, so both libraries produce the same document from the same input.
 
 ### Removed
 - `Dialog.isRecordingSet()`, the `recording-set` and `transfer` Dialog types and their

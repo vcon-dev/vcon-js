@@ -25,23 +25,53 @@ export function asList<T = any>(value: T | T[] | null | undefined): T[] {
 const DATE_RE =
   /^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s*(Z|z|[+-]\d{2}(?::?\d{2})?)?)?$/;
 
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function isLeapYear(y: number): boolean {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+}
+
 /**
- * Parse an ISO 8601 / RFC 3339 date-time string to epoch milliseconds, or
- * undefined if it is not one. A date-time with no offset is read as UTC, as the
- * Python reference does, so results do not depend on the machine's time zone.
+ * Parse an ISO 8601 / RFC 3339 date-time string to integer epoch microseconds,
+ * or undefined if it is not one. A date-time with no offset is read as UTC, as
+ * the Python reference does, so results do not depend on the machine's time
+ * zone. Out-of-range fields (month 13, February 30, hour 24, second 60, an
+ * offset of 24 hours or more) are rejected rather than rolled over. Fractional
+ * seconds keep microsecond precision (digits past the sixth are dropped), so
+ * timestamps written by microsecond-precision writers compare and subtract
+ * exactly.
  */
-export function parseDateTime(value: unknown): number | undefined {
+export function parseDateTimeMicros(value: unknown): number | undefined {
   if (typeof value !== 'string') return undefined;
   const m = DATE_RE.exec(value.trim());
   if (!m) return undefined;
-  const [, y, mo, d, h = '00', mi = '00', s = '00', frac = '', tz = 'Z'] = m;
-  let offset = tz.toUpperCase();
-  if (offset !== 'Z') {
-    const digits = offset.slice(1).replace(':', '');
-    offset = offset[0] + digits.slice(0, 2) + ':' + (digits.slice(2) || '00');
+  const [, ys, mos, ds, hs = '00', mis = '00', ss = '00', frac = '', tz = 'Z'] = m;
+  const [y, mo, d, h, mi, s] = [ys, mos, ds, hs, mis, ss].map(Number);
+  if (y < 1 || mo < 1 || mo > 12 || d < 1) return undefined;
+  const dim = mo === 2 && isLeapYear(y) ? 29 : DAYS_IN_MONTH[mo - 1];
+  if (d > dim || h > 23 || mi > 59 || s > 59) return undefined;
+  let offsetMinutes = 0;
+  const t = tz.toUpperCase();
+  if (t !== 'Z') {
+    const digits = t.slice(1).replace(':', '');
+    const oh = Number(digits.slice(0, 2));
+    const om = Number(digits.slice(2) || '0');
+    if (oh > 23 || om > 59) return undefined;
+    offsetMinutes = (t[0] === '-' ? -1 : 1) * (oh * 60 + om);
   }
-  const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${s}${frac}${offset}`);
-  return Number.isNaN(ms) ? undefined : ms;
+  const date = new Date(Date.UTC(2000, mo - 1, d, h, mi, s));
+  date.setUTCFullYear(y);
+  const micros = frac ? Number(frac.slice(1, 7).padEnd(6, '0')) : 0;
+  return date.getTime() * 1000 + micros - offsetMinutes * 60_000_000;
+}
+
+/**
+ * Parse an ISO 8601 / RFC 3339 date-time string to epoch milliseconds, or
+ * undefined if it is not one. See parseDateTimeMicros for the rules.
+ */
+export function parseDateTime(value: unknown): number | undefined {
+  const us = parseDateTimeMicros(value);
+  return us === undefined ? undefined : Math.floor(us / 1000);
 }
 
 /** Convert a Date to an ISO string; pass other values through. */

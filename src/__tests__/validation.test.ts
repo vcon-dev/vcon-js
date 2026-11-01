@@ -82,3 +82,18 @@ describe('Vcon guards', () => {
     expect(() => { v.amended_from = { uuid: '550e8400-e29b-41d4-a716-446655440000' }; }).toThrow(/mutually exclusive/);
   });
 });
+
+describe('parseDateTime', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { parseDateTime, parseDateTimeMicros } = require('../util');
+  it('rejects out-of-range fields instead of rolling them over', () => {
+    for (const v of ['2022-02-30T00:00:00Z', '2021-02-29T00:00:00Z', '2022-01-01T24:00:00Z', '2022-01-01T00:60:00Z', '2022-01-01T00:00:00+24:00']) {
+      expect(parseDateTime(v)).toBeUndefined();
+    }
+    expect(parseDateTime('2024-02-29T00:00:00Z')).toBe(Date.parse('2024-02-29T00:00:00Z'));
+  });
+  it('keeps microseconds and applies offsets', () => {
+    expect(parseDateTimeMicros('2022-01-01T05:00:00.1234567+05:00')).toBe(Date.parse('2022-01-01T00:00:00Z') * 1000 + 123456);
+    expect(parseDateTimeMicros('2022-01-01T00:00:00')).toBe(Date.parse('2022-01-01T00:00:00Z') * 1000);
+  });
+});
