@@ -5,14 +5,16 @@
  * text chat conversation between an agent and a customer.
  *
  * Key concepts covered:
- * - Creating a new vCon
+ * - Creating a new vCon (syntax "0.5.0")
  * - Adding parties with different identifiers
- * - Creating text dialogs
+ * - Grouping the conversation in a Session (core-05)
+ * - Creating text dialogs: a text Dialog's parties are the sender only,
+ *   the Session lists the receivers
  * - Adding tags for classification
- * - Serializing to JSON
+ * - Validating and serializing to JSON
  */
 
-import { Vcon, Party, Dialog } from '../src';
+import { Vcon, Party, Dialog, Session } from '../src';
 
 console.log('=== Example 1: Text Chat Conversation ===\n');
 
@@ -42,7 +44,12 @@ const agent = new Party({
 vcon.addParty(agent);
 console.log('Added agent:', agent.name);
 
-// Step 4: Create the conversation (simulating a chat)
+// Step 4: Add a Session. Core-05 requires one when there is dialog. The Session
+// parties are the receivers; the first party is the implied originator.
+const startTime = new Date();
+const session = vcon.addSession(new Session({ start: startTime, parties: [0, 1] }));
+
+// Step 5: Create the conversation (simulating a chat)
 const conversationMessages = [
   { from: 0, text: "Hi, I'm having trouble logging into my account." },
   { from: 1, text: "Hello Alice! I'd be happy to help you with that. Can you tell me what error message you're seeing?" },
@@ -57,18 +64,17 @@ const conversationMessages = [
 ];
 
 // Add each message as a dialog
-let messageTime = new Date();
+let messageTime = startTime;
 conversationMessages.forEach((msg) => {
   const dialog = new Dialog({
     type: 'text',
     start: messageTime.toISOString(),
-    parties: [0, 1],  // Both parties are part of the conversation
-    originator: msg.from,  // Who sent this message
+    parties: [msg.from],  // Contributors only: the sender of this message
     body: msg.text,
     mediatype: 'text/plain',
     encoding: 'none'
   });
-  vcon.addDialog(dialog);
+  vcon.addDialog(dialog, session);
 
   // Simulate time passing between messages (10-30 seconds)
   messageTime = new Date(messageTime.getTime() + (10 + Math.random() * 20) * 1000);
@@ -76,7 +82,7 @@ conversationMessages.forEach((msg) => {
 
 console.log(`\nAdded ${conversationMessages.length} dialog messages`);
 
-// Step 5: Set conversation subject and add tags
+// Step 6: Set conversation subject and add tags
 vcon.subject = 'Account Login Issue - Locked Account';
 vcon.addTag('category', 'account-support');
 vcon.addTag('resolution', 'resolved');
@@ -86,12 +92,23 @@ console.log('\nConversation metadata:');
 console.log(`  Subject: ${vcon.subject}`);
 console.log(`  Tags: ${JSON.stringify(vcon.tags)}`);
 
-// Step 6: Serialize to JSON
+// Step 7: Check the vCon against core-05, then serialize to JSON
+const { valid, errors } = vcon.isValid();
+console.log(`\nvCon is valid: ${valid}`);
+if (!valid) {
+  console.log(errors);
+  process.exit(1);
+}
+// This example records no lawful basis. Add a purpose "lawful_basis" attachment
+// before using this pattern for real conversations.
+console.log(`Carries a lawful_basis attachment: ${vcon.hasLawfulBasis()}`);
+
+
 const jsonOutput = vcon.toJson();
 console.log('\n--- Serialized vCon JSON ---');
 console.log(JSON.stringify(JSON.parse(jsonOutput), null, 2));
 
-// Step 7: Demonstrate loading from JSON
+// Step 8: Demonstrate loading from JSON
 console.log('\n--- Loading vCon from JSON ---');
 const loadedVcon = Vcon.buildFromJson(jsonOutput);
 console.log(`Loaded vCon UUID: ${loadedVcon.uuid}`);
@@ -101,7 +118,8 @@ console.log(`Number of dialogs: ${loadedVcon.dialog.length}`);
 // Print conversation summary
 console.log('\n--- Conversation Summary ---');
 loadedVcon.dialog.forEach((d, i) => {
-  const sender = loadedVcon.parties[d.originator as number];
+  const senderIndex = (d.parties as number[])[0];
+  const sender = loadedVcon.parties[senderIndex];
   console.log(`[${i + 1}] ${sender.name}: ${d.body}`);
 });
 

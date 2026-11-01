@@ -2,9 +2,101 @@
 
 All notable changes to `vcon-js` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project uses semver
-(pre-1.0, so a minor bump may carry breaking changes).
+(a major bump carries breaking changes).
 
-The `vcon` syntax parameter is `"0.4.0"` and is independent of the package version.
+The `vcon` syntax parameter is `"0.5.0"` and is independent of the package version.
+
+## [1.0.0] — 2026-11-01
+
+Retargets the library to `draft-ietf-vcon-vcon-core-05` (syntax `"0.5.0"`), matching the Python
+reference implementation. This is a breaking release: the Dialog Object lost its transfer,
+recording-set, party history and originator content, which moved to the new Session and Event
+Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
+
+### Added
+- `Session` and `SessionReference` (`src/session.ts`), the top-level `sessions` array,
+  `Vcon.addSession()` and `Vcon.sessions`.
+- `Event` (`src/event.ts`), the top-level `events` array, `Vcon.addEvent()` and `Vcon.events`.
+  The per-event-type parameter table (section 4.3.1.5) is enforced by `new Event(...)`,
+  `validateEvent()` and `Vcon.isValid()`.
+- `redacted_from`, `amended_from` and `redacted_strings` top-level parameters and properties;
+  Dialog `redacted_segments`; Attachment `session`; Analysis `sessions` and `analysis`.
+- Empty Dialog Objects: `Dialog.placeholder()` serializes as `{}`. `Dialog.fromDict()` wraps an
+  existing Dialog Object for reading.
+- `migrate040To050(vcon, { strict })` (`src/migration.ts`), a table driven implementation of
+  Appendix A.1 (`MIGRATION_STEPS`, one entry per step T1 to T15) that returns
+  `{ vcon, report }`. The `MigrationReport` lists every inferred value, every fallback for a
+  required field and every unresolved item, and keeps the original content of removed Dialogs.
+  `MigrationError` is thrown for input that cannot be migrated and, in strict mode, when a
+  required field has no source. Signed input is migrated as its unsigned payload and the report
+  sets `resignRequired`; the library never re-signs.
+- `Vcon.migrate040To050()` static method, `Vcon.migrationReport`, and the `migrateLegacy` and
+  `strictMigration` options on `new Vcon()` and `Vcon.buildFromJson()`.
+- `Vcon.isValid()` and `Vcon.getValidationWarnings()`, backed by `validateVconDict()`.
+- `Vcon.sign(key, alg = "RS256")`, `Vcon.verify(key)` and `Vcon.generateKeyPair()` (JWS with
+  Node `crypto`, no new dependency); `AlgorithmNotPermittedError`. This restores a signing
+  surface that 0.5.2 removed, because core-05 section 6.2.2 now forbids `alg` "none" and the
+  library needs somewhere to enforce it.
+- `Vcon.addIncompleteDialog()`, `Vcon.findDialogsByType()`, `Vcon.findLawfulBasisAttachments()`
+  and `Vcon.hasLawfulBasis()`.
+- Test fixtures: the core-05 Appendix C JSON Schema and the Appendix B examples, under
+  `src/__tests__/fixtures/`. The Appendix B examples and the library's output are validated
+  against the schema. Migration, Session, Event, signing and extension-enforcement tests are
+  ported from the reference implementation.
+
+### Changed
+- **Breaking:** `VCON_VERSION` and `Vcon.buildNew()` emit `"0.5.0"` (was `"0.4.0"`). `Vcon.vcon`
+  is `undefined` when the input had no `vcon` parameter (it is optional in 0.5.0) instead of
+  defaulting.
+- **Breaking:** a vCon that declares `"vcon": "0.4.0"` is migrated on load, so `vcon.vcon` reads
+  `"0.5.0"` and Dialog indices are preserved. Use `{ migrateLegacy: false }` to keep the raw
+  0.4.0 object. A signed 0.4.0 vCon is kept signed on load; migrate it explicitly after
+  verifying.
+- **Breaking:** `Vcon.redacted` and `Vcon.amended` are now `redacted_from` and `amended_from`
+  (`VconData.redacted` and `amended` are gone, and the boolean form is gone); the old names remain
+  as deprecated aliases on `Vcon` that warn.
+- **Breaking:** Dialog types are `recording`, `text` and `incomplete`. `new Dialog({ type: 'audio' | 'video' })`
+  still works but warns and builds a `recording`; on read, `audio` and `video` Dialogs are
+  accepted and `getValidationWarnings()` notes them. The `transfer` and `recording-set` types are
+  gone, as are the Dialog parameters `party_history`, `originator`, `transferee`, `transferor`,
+  `transfer_target`, `original`, `consultation`, `target_dialog`, `recordings`, `recording_set`
+  and `transfer`; passing one to `new Dialog()` throws. `PartyHistory` is deprecated: it warns
+  and converts with `toEvent(sessions)`. `Dialog.isTransfer()` warns and returns false;
+  `Dialog.isRecordingSet()` is removed. `Dialog.type` and `Dialog.start` are optional in the
+  type, since `{}` is a valid Dialog.
+- **Breaking:** Dialog `parties` are the contributors only (a nested list is several
+  contributors on one channel; `null` is a channel with no contributor). The receivers are the
+  `parties` of the Session that lists the Dialog.
+- **Breaking:** attachments need `party` plus `dialog` (a single index; arrays are no longer
+  accepted) or `session`. The `dialog` default of `0` is gone. With neither given,
+  `addAttachment()` uses the only Session when the vCon has exactly one and throws otherwise; no
+  placeholder Session is added and a given `dialog` index is never widened to a Session.
+  `addTag()` (whole-vCon metadata) lists every Session and adds an empty placeholder Session
+  when there is none. `addAttachment()` defaults `start` to `created_at` and `mediatype` to
+  `application/json` for `encoding: "json"`. `Attachment.validate()` requires `start`, `party`
+  and `dialog` or `session`, and no longer accepts the `type: "lawful_basis"` form (the
+  extension uses `purpose: "lawful_basis"`).
+- **Breaking:** `addDialog()` returns the new Dialog's index and takes an optional `session`.
+- `addAnalysis()` accepts `sessions` and `analysis`, and defaults `encoding` to `"none"` for a
+  string body, which the schema requires.
+- `isValid()` checks: a Session exists when there is dialog or events; all Session, Event,
+  attachment and analysis references; the Event parameter table; `redacted_from` and
+  `amended_from` exclusivity; that `extensions` lists every extension in use (`lawful_basis`,
+  `wtf_transcription`, or any value outside the core vocabulary) and every `critical` entry;
+  inline attachment `mediatype`; `__REDACTED_REF_#` references against `redacted_strings`; and
+  that `vcon`, when present, is `"0.5.0"`.
+- `Dialog.validate()` rejects unknown Dialog types, content on an `incomplete` Dialog and media
+  types outside the known set (text, message and multipart subtypes are accepted).
+- The vendored test schema is now the core-05 Appendix C schema (was the `0.4.0` schema).
+
+### Removed
+- `Dialog.isRecordingSet()`, the `recording-set` and `transfer` Dialog types and their
+  parameters (see Changed).
+
+### Not changed
+- Tags keep the JSON-string body and dictionary API. Encryption (JWE) is not implemented.
+- The sample `*.vcon.json` files under `examples/` and `test-vcons/` are legacy data and were
+  not regenerated; the readers migrate them if they declare `0.4.0`.
 
 ## [0.5.2] — 2026-08-06
 

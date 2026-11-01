@@ -6,15 +6,15 @@
  *
  * Key concepts covered:
  * - Multi-party conferences (more than 2 parties)
- * - Video recording dialogs
+ * - Video recording dialogs inside Sessions
+ * - Join and drop Events
  * - Multiple attachments with different purposes
  * - Group references for related vCons
  * - Incomplete dialogs (failed join attempts)
  * - External and inline content
- * - Amendment and redaction references
  */
 
-import { Vcon, Party, Dialog } from '../src';
+import { Vcon, Party, Dialog, Session, Event } from '../src';
 
 console.log('=== Example 3: Video Conference with Attachments ===\n');
 
@@ -70,36 +70,46 @@ parties.forEach(p => vcon.addParty(p));
 console.log(`Added ${parties.length} conference participants:`);
 parties.forEach((p, i) => console.log(`  [${i}] ${p.name} (${p.role}) - ${p.meta?.title}`));
 
-// Step 3: Add an incomplete dialog for a failed join attempt
+// Step 3: Add the Sessions. Session 0 is the join attempt that failed; Session 1
+// is the meeting. The first party of a Session is the implied originator.
 const failedJoinTime = new Date('2025-01-20T09:58:00-08:00');
-const failedJoinDialog = new Dialog({
-  type: 'incomplete',
-  start: failedJoinTime.toISOString(),
-  parties: 3,  // Raj tried to join (single party as integer)
-  disposition: 'failed',
-  meta: {
-    error: 'network_timeout',
-    retry_count: 2
-  }
-});
-vcon.addDialog(failedJoinDialog);
-console.log('\nAdded incomplete dialog (failed join attempt)');
-
-// Step 4: Create the main video conference recording
 const conferenceStart = new Date('2025-01-20T10:00:00-08:00');
 const conferenceDuration = 3720; // 62 minutes
 
-const videoDialog = new Dialog({
-  type: 'recording',
-  start: conferenceStart.toISOString(),
-  parties: [0, 1, 2, 3, 4],  // All participants
-  originator: 0,  // Sarah (host) started the meeting
+const attemptSession = vcon.addSession(new Session({ start: failedJoinTime, parties: [3] }));
+const meetingSession = vcon.addSession(new Session({
+  start: conferenceStart,
   duration: conferenceDuration,
-  application: 'zoom',
+  parties: [0, 1, 2, 3, 4], // Sarah (host) started the meeting, so she is first
   session_id: {
     local: '550e8400-e29b-41d4-a716-446655440000',
     remote: '550e8400-e29b-41d4-a716-446655440001'
-  }
+  },
+  // The failed attempt came before the meeting
+  sessions: [{ session: attemptSession, type: 'precursor', description: 'failed join attempt' }]
+}));
+
+// An incomplete dialog for the failed join attempt. It has no content; its
+// parties are the party that attempted the call.
+vcon.addIncompleteDialog({
+  start: failedJoinTime,
+  disposition: 'failed',
+  parties: [3], // Raj tried to join
+  meta: {
+    error: 'network_timeout',
+    retry_count: 2
+  },
+  session: attemptSession
+});
+console.log('\nAdded incomplete dialog (failed join attempt)');
+
+// Step 4: Create the main video conference recording
+const videoDialog = new Dialog({
+  type: 'recording',
+  start: conferenceStart.toISOString(),
+  parties: [0, 1, 2, 3, 4],  // All participants contribute
+  duration: conferenceDuration,
+  application: 'zoom'
 });
 
 // Add external video reference
@@ -108,33 +118,35 @@ videoDialog.addExternalData(
   'video/mp4',
   {
     filename: 'q1-roadmap-review-2025-01-20.mp4',
-    content_hash: 'sha512-fYZelZskZpGMmGOvypQtD7idfJrAyZuvw3SVBN7Zdzm6Q5K76j6r10R6V9NAjEXVrUd9TdL5KbbX-8wOWflvgQ=='
+    content_hash: 'sha512-fYZelZskZpGMmGOvypQtD7idfJrAyZuvw3SVBN7Zdzm6Q5K76j6r10R6V9NAjEXVrUd9TdL5KbbX-8wOWflvgQ'
   }
 );
+vcon.addDialog(videoDialog, meetingSession);
 
-// Track when participants joined/left (spec events: join, drop, hold, unhold, mute, unmute, keydown, keyup)
-videoDialog.party_history = [
-  { party: 0, event: 'join', time: conferenceStart.toISOString() },
-  { party: 1, event: 'join', time: new Date(conferenceStart.getTime() + 30000).toISOString() },
-  { party: 2, event: 'join', time: new Date(conferenceStart.getTime() + 45000).toISOString() },
-  { party: 3, event: 'join', time: new Date(conferenceStart.getTime() + 180000).toISOString() }, // Raj joined late after retry
-  { party: 4, event: 'join', time: new Date(conferenceStart.getTime() + 60000).toISOString() },
-  { party: 2, event: 'drop', time: new Date(conferenceStart.getTime() + 3000000).toISOString() }, // Emma left at 50min
-  { party: 0, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 1, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 3, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() },
-  { party: 4, event: 'drop', time: new Date(conferenceStart.getTime() + conferenceDuration * 1000).toISOString() }
-];
+// Track when participants joined/left with Events (join, drop, hold, unhold,
+// mute, unmute, keydown, keyup). Each Event lists the Session(s) it applies to.
+const at = (ms: number) => new Date(conferenceStart.getTime() + ms);
+const endMs = conferenceDuration * 1000;
+[
+  { party: 0, type: 'join', ms: 0 },
+  { party: 1, type: 'join', ms: 30000 },
+  { party: 2, type: 'join', ms: 45000 },
+  { party: 4, type: 'join', ms: 60000 },
+  { party: 3, type: 'join', ms: 180000 }, // Raj joined late after retry
+  { party: 2, type: 'drop', ms: 3000000 }, // Emma left at 50min
+  { party: 0, type: 'drop', ms: endMs },
+  { party: 1, type: 'drop', ms: endMs },
+  { party: 3, type: 'drop', ms: endMs },
+  { party: 4, type: 'drop', ms: endMs }
+].forEach(e => vcon.addEvent(new Event({ type: e.type, time: at(e.ms), sessions: meetingSession, party: e.party })));
 
-vcon.addDialog(videoDialog);
 console.log(`Added video recording dialog (${Math.floor(conferenceDuration / 60)} minutes)`);
 
 // Step 5: Add a screen sharing segment as a separate dialog
 const screenShareDialog = new Dialog({
   type: 'recording',
   start: new Date(conferenceStart.getTime() + 600000).toISOString(), // 10 min into meeting
-  parties: [0, 1, 2, 3, 4],
-  originator: 0, // Sarah shared her screen
+  parties: [0], // Sarah shared her screen
   duration: 1200, // 20 minutes of screen share
   mediatype: 'video/webm',
   meta: { content_type: 'screen_share' }
@@ -145,11 +157,11 @@ screenShareDialog.addExternalData(
   'video/webm',
   {
     filename: 'roadmap-screenshare.webm',
-    content_hash: 'sha512-Y3jOu_FlOcL2Q1F6Z_2cTtkqVuKHQ4-OJQ4Bk7CkqOR-eAYAZuTu_zPMRTRddqZcvVAJI9LSrtDHHzwgmZ5dGw=='
+    content_hash: 'sha512-Y3jOu_FlOcL2Q1F6Z_2cTtkqVuKHQ4-OJQ4Bk7CkqOR-eAYAZuTu_zPMRTRddqZcvVAJI9LSrtDHHzwgmZ5dGw'
   }
 );
 
-vcon.addDialog(screenShareDialog);
+vcon.addDialog(screenShareDialog, meetingSession);
 console.log('Added screen share recording dialog');
 
 // Step 6: Add attachments
@@ -162,7 +174,7 @@ vcon.addAttachment({
   body: 'UEsDBBQAAAAIAGiC...',  // Truncated base64url content
   encoding: 'base64url',
   party: 0,        // Shared by Sarah
-  dialog: 1,       // Main recording dialog
+  dialog: 1,       // Main recording dialog (the Dialog index; never widened to a Session)
   start: new Date(conferenceStart.getTime() + 300000).toISOString()
 });
 console.log('\nAdded presentation attachment');
@@ -171,7 +183,7 @@ console.log('\nAdded presentation attachment');
 vcon.addAttachment({
   purpose: 'meeting-notes',
   url: 'https://docs.company.com/meetings/2025-01-20-roadmap-notes.md',
-  content_hash: 'sha512-AfymyPwHQiWXh1khT2xSPHFOnImhfa4VnY8FmZjE0i1ZECN56dGOuPC4yKB8WIbCYWLrcwoeMm8gJBYNkPbjbA==',
+  content_hash: 'sha512-AfymyPwHQiWXh1khT2xSPHFOnImhfa4VnY8FmZjE0i1ZECN56dGOuPC4yKB8WIbCYWLrcwoeMm8gJBYNkPbjbA',
   mediatype: 'text/markdown',
   filename: 'meeting-notes.md',
   party: 1,        // Mike took notes
@@ -183,19 +195,21 @@ console.log('Added meeting notes attachment (external)');
 vcon.addAttachment({
   purpose: 'action-items',
   url: 'https://docs.company.com/meetings/2025-01-20-action-items.xlsx',
-  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg==',
+  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg',
   mediatype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   filename: 'action-items.xlsx',
   party: 0,
-  dialog: [1, 2]   // Related to main recording and screen share
+  session: meetingSession // Related to the whole meeting
 });
 console.log('Added action items spreadsheet');
 
-// Chat transcript (vCon-level attachment — party/dialog default to 0)
+// Chat transcript, scoped to the meeting Session
 vcon.addAttachment({
   purpose: 'chat-transcript',
   mediatype: 'text/plain',
   filename: 'meeting-chat.txt',
+  party: 1,
+  session: meetingSession,
   body: `[10:02] Mike Johnson: Good morning everyone!
 [10:02] Emma Wilson: Morning from London!
 [10:03] Lisa Kim: Hello from Seoul - it's late here but excited to discuss the roadmap
@@ -217,7 +231,7 @@ vcon.addAnalysis({
   vendor: 'assembly-ai',
   product: 'universal-2',
   url: 'https://storage.company.com/transcripts/2025-01-20-roadmap.json',
-  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg==',
+  content_hash: 'sha512-VgnVqYWAYAFRdmHN_HJN9bN-2_BS-aWVPiOZsfm0PLmLU0V0EGTYjJK0PR0ZJ7iZK_QqYJyT-NPlYI4yxF1Wjg',
   mediatype: 'application/json'
 });
 
@@ -299,16 +313,23 @@ vcon.analysis.forEach((a, i) => {
 console.log('\nExtensions:', vcon.extensions);
 console.log('Tags:', vcon.tags);
 
-// Step 10: Validate dialogs
+// Step 10: Validate dialogs, then the whole vCon against core-05
 console.log('\n--- Validation ---');
 vcon.dialog.forEach((d, i) => {
-  const dialogObj = new Dialog(d as any);
+  const dialogObj = Dialog.fromDict(d);
   const result = dialogObj.validate();
   console.log(`Dialog ${i}: ${result.valid ? 'VALID' : 'INVALID'}`);
   if (result.errors.length > 0) {
     result.errors.forEach(e => console.log(`  - ${e}`));
   }
 });
+const whole = vcon.isValid();
+console.log(`vCon: ${whole.valid ? 'VALID' : 'INVALID'}`);
+whole.errors.forEach(e => console.log(`  - ${e}`));
+if (!whole.valid) process.exit(1);
+// This example records no lawful basis; a real meeting recording needs a
+// purpose "lawful_basis" attachment scoped to the Session.
+console.log(`Carries a lawful_basis attachment: ${vcon.hasLawfulBasis()}`);
 
 // Step 11: Show JSON structure
 console.log('\n--- vCon JSON Structure ---');
@@ -319,6 +340,8 @@ console.log(`{
   subject: "${json.subject}",
   created_at: "${json.created_at}",
   parties: [${json.parties.length} parties],
+  sessions: [${json.sessions.length} sessions],
+  events: [${json.events.length} events],
   dialog: [${json.dialog.length} dialogs],
   attachments: [${json.attachments.length} attachments],
   analysis: [${json.analysis.length} analysis items],

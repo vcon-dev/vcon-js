@@ -1,4 +1,4 @@
-import { Vcon, Party, Dialog } from '../src';
+import { Vcon, Party, Dialog, Session } from '../src';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -88,12 +88,15 @@ if (fileExtension === '.mp3') {
   mimeType = 'audio/aac';
 }
 
+// Core-05: Dialogs hang off a Session whose parties are the receivers
+const session = vcon.addSession(new Session({ start: new Date(), parties: [1, 0] })); // Agent (1) is the originator
+
 // Add an audio dialog with inline recording
 const audioDialog = new Dialog({
   type: 'recording',
   start: new Date(),
-  parties: [1, 0], // Agent (1) and Customer (0)
-  mimetype: mimeType,
+  parties: [1, 0], // Agent (1) and Customer (0) contribute
+  mediatype: mimeType,
   filename: fileName,
   duration: 0, // Will be updated if available from Deepgram
   meta: {
@@ -105,18 +108,14 @@ const audioDialog = new Dialog({
   }
 });
 
-// Read the audio file and convert it to base64
+// Read the audio file and convert it to base64url (base64 is not a valid encoding)
 const audioFileBuffer = fs.readFileSync(inputWavFile);
-const base64AudioContent = audioFileBuffer.toString('base64');
+const base64AudioContent = audioFileBuffer.toString('base64url');
 
-// Add inline audio data (base64 encoded)
-audioDialog.addInlineData(
-  base64AudioContent,
-  fileName,
-  mimeType
-);
+// Add inline audio data (base64url encoded)
+audioDialog.addInlineData(base64AudioContent, mimeType, { encoding: 'base64url', filename: fileName });
 
-vcon.addDialog(audioDialog);
+vcon.addDialog(audioDialog, session);
 
 // Function to transcribe audio using Deepgram
 async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
@@ -221,6 +220,11 @@ async function processAudioFile() {
       encoding: 'none'
     });
     
+    // Validate against core-05. This example records no lawful basis; add a
+    // purpose "lawful_basis" attachment before using it for real recordings.
+    console.log('Valid:', vcon.isValid());
+    console.log('Has lawful basis:', vcon.hasLawfulBasis());
+
     // Convert to JSON
     const json = vcon.toJson();
     console.log('vCon JSON length:', json.length);
