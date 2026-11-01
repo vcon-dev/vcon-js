@@ -5,43 +5,17 @@ import { Party } from '../party';
 /**
  * Round-trip coverage for the additions in the current core draft
  * (draft-ietf-vcon-vcon-core, past -02) and the provenance extension:
- *   - recording-set dialog type + recordings[] / recording_set
+ *   - (recording-set and transfer Dialogs are gone in core-05: Sessions and Events)
  *   - Analysis based on an attachment (dialog optional)
  *   - provenance parameter on dialog and analysis
  *   - Party type/org/dept fields
  */
 describe('core-latest additions', () => {
-  it('supports recording-set dialogs with recordings and recording_set', () => {
-    const set = new Dialog({
-      type: 'recording-set',
-      start: '2026-01-15T10:30:00Z',
-      recordings: [1, 2]
-    });
-    expect(set.isRecordingSet()).toBe(true);
-    expect(Dialog.DIALOG_TYPES).toContain('recording-set');
-
-    const member = new Dialog({
-      type: 'recording',
-      start: '2026-01-15T10:30:00Z',
-      parties: [0, 1],
-      recording_set: 0
-    });
-
-    const dict = set.toDict();
-    expect(dict.type).toBe('recording-set');
-    expect(dict.recordings).toEqual([1, 2]);
-    expect(member.toDict().recording_set).toBe(0);
-  });
-
-  it('widens transfer index fields to accept arrays', () => {
-    const d = new Dialog({
-      type: 'transfer',
-      start: '2026-01-15T10:30:00Z',
-      original: [0, 1],
-      target_dialog: 2
-    });
-    expect(d.toDict().original).toEqual([0, 1]);
-    expect(d.toDict().target_dialog).toBe(2);
+  it('no longer has recording-set or transfer Dialog types', () => {
+    expect(Dialog.DIALOG_TYPES).not.toContain('recording-set');
+    expect(Dialog.DIALOG_TYPES).not.toContain('transfer');
+    expect(() => new Dialog({ type: 'recording', start: '2026-01-15T10:30:00Z', recording_set: 0 })).toThrow(/removed/);
+    expect(() => new Dialog({ type: 'recording-set', start: '2026-01-15T10:30:00Z', recordings: [1] })).toThrow(/removed/);
   });
 
   it('allows analysis keyed off an attachment with no dialog', () => {

@@ -1,5 +1,4 @@
 import { Dialog } from '../dialog';
-import { PartyHistory } from '../party';
 
 describe('Dialog', () => {
   it('should create a dialog with minimal properties', () => {
@@ -40,13 +39,11 @@ describe('Dialog', () => {
 
   it('should create a dialog with all properties', () => {
     const start = new Date();
-    const partyHistory = new PartyHistory(0, 'join', start);
 
     const dialog = new Dialog({
       type: 'text',
       start,
       parties: [0, 1],
-      originator: 0,
       mediatype: 'text/plain',
       filename: 'conversation.txt',
       body: 'Hello!',
@@ -54,24 +51,17 @@ describe('Dialog', () => {
       alg: 'sha256',
       signature: 'signature',
       disposition: 'no-answer',
-      party_history: [partyHistory.toDict()],
-      transferee: 1,
-      transferor: 0,
-      transfer_target: 2,
-      original: 0,
-      consultation: 1,
-      target_dialog: 0,
       campaign: 'support',
       interaction: 'call',
       skill: 'sales',
       duration: 300,
+      redacted_segments: [{ start: 0, end: 3 }],
       meta: { key: 'value' }
     });
 
     expect(dialog.type).toBe('text');
     expect(dialog.start).toBe(start);
     expect(dialog.parties).toEqual([0, 1]);
-    expect(dialog.originator).toBe(0);
     expect(dialog.mediatype).toBe('text/plain');
     expect(dialog.filename).toBe('conversation.txt');
     expect(dialog.body).toBe('Hello!');
@@ -79,18 +69,27 @@ describe('Dialog', () => {
     expect(dialog.alg).toBe('sha256');
     expect(dialog.signature).toBe('signature');
     expect(dialog.disposition).toBe('no-answer');
-    expect(dialog.party_history).toBeDefined();
-    expect(dialog.transferee).toBe(1);
-    expect(dialog.transferor).toBe(0);
-    expect(dialog.transfer_target).toBe(2);
-    expect(dialog.original).toBe(0);
-    expect(dialog.consultation).toBe(1);
-    expect(dialog.target_dialog).toBe(0);
     expect(dialog.campaign).toBe('support');
     expect(dialog.interaction).toBe('call');
     expect(dialog.skill).toBe('sales');
     expect(dialog.duration).toBe(300);
+    expect(dialog.redacted_segments).toEqual([{ start: 0, end: 3 }]);
     expect(dialog.meta).toEqual({ key: 'value' });
+  });
+
+  it.each([
+    'originator',
+    'party_history',
+    'transferee',
+    'transferor',
+    'transfer_target',
+    'original',
+    'consultation',
+    'target_dialog',
+    'recordings',
+    'recording_set'
+  ])('rejects the 0.4.0 parameter %s', key => {
+    expect(() => new Dialog({ type: 'recording', start: new Date(), [key]: 0 })).toThrow(/removed in vCon 0.5.0/);
   });
 
   it('should handle external data with new API', () => {
@@ -146,7 +145,6 @@ describe('Dialog', () => {
     });
     expect(textDialog.isText()).toBe(true);
     expect(textDialog.isRecording()).toBe(false);
-    expect(textDialog.isTransfer()).toBe(false);
     expect(textDialog.isIncomplete()).toBe(false);
 
     const recordingDialog = new Dialog({
@@ -157,12 +155,8 @@ describe('Dialog', () => {
     expect(recordingDialog.isRecording()).toBe(true);
     expect(recordingDialog.isText()).toBe(false);
 
-    const transferDialog = new Dialog({
-      type: 'transfer',
-      start: new Date(),
-      parties: [0]
-    });
-    expect(transferDialog.isTransfer()).toBe(true);
+    // isTransfer() is deprecated and always false: transfers are Events now.
+    expect(textDialog.isTransfer()).toBe(false);
 
     const incompleteDialog = new Dialog({
       type: 'incomplete',
@@ -227,7 +221,7 @@ describe('Dialog', () => {
   });
 
   it('should have valid dialog types constant', () => {
-    expect(Dialog.DIALOG_TYPES).toEqual(['recording', 'text', 'transfer', 'incomplete', 'recording-set']);
+    expect(Dialog.DIALOG_TYPES).toEqual(['recording', 'text', 'incomplete']);
   });
 
   it('should have valid dispositions constant', () => {
@@ -318,5 +312,41 @@ describe('Dialog', () => {
       local: '550e8400-e29b-41d4-a716-446655440000',
       remote: '550e8400-e29b-41d4-a716-446655440001'
     });
+  });
+
+  it('builds an empty placeholder Dialog that serializes as {}', () => {
+    const d = Dialog.placeholder();
+    expect(d.isPlaceholder()).toBe(true);
+    expect(d.toDict()).toEqual({});
+    expect(d.validate().valid).toBe(true);
+  });
+
+  it('builds a recording Dialog for the legacy audio and video types and warns', () => {
+    const spy = jest.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+    try {
+      expect(new Dialog({ type: 'audio', start: new Date() }).type).toBe('recording');
+      expect(new Dialog({ type: 'video', start: new Date() }).type).toBe('recording');
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('accepts null and nested entries in parties', () => {
+    const d = new Dialog({ type: 'recording', start: new Date(), parties: [[0, 2], null, 1] });
+    expect(d.toDict().parties).toEqual([[0, 2], null, 1]);
+  });
+
+  it('rejects content on an incomplete Dialog', () => {
+    const d = new Dialog({ type: 'incomplete', start: new Date(), disposition: 'busy', body: 'x', mediatype: 'text/plain' });
+    const { valid, errors } = d.validate();
+    expect(valid).toBe(false);
+    expect(errors).toContain('Incomplete dialog MUST NOT include body');
+    expect(errors).toContain('Incomplete dialog MUST NOT include mediatype');
+  });
+
+  it('Dialog.fromDict wraps a legacy Dialog without throwing', () => {
+    const d = Dialog.fromDict({ type: 'transfer', start: '2025-01-01T00:00:00Z', transferor: 0 });
+    expect(d.type).toBe('transfer');
   });
 });
