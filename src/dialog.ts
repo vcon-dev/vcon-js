@@ -1,12 +1,13 @@
 import {
   Dialog as DialogType,
-  PartyHistory,
   DialogType as DialogTypeEnum,
   DialogDisposition,
   Encoding,
-  SessionId
+  SessionId,
+  RedactedSegment
 } from './types';
-import { PartyHistory as PartyHistoryClass } from './party';
+import { DIALOG_MIME_TYPES, LEGACY_DIALOG_PARAMS, mediatypeOk } from './validation';
+import { parseDateTime, warn } from './util';
 
 /**
  * Matches a spec-compliant content_hash: "sha512-" + base64url-encoded
@@ -20,13 +21,34 @@ function isValidContentHash(value: string): boolean {
   return SHA512_CONTENT_HASH_RE.test(value);
 }
 
+/** Parameters of the Dialog constructor. */
+export type DialogParams = Partial<DialogType> & {
+  type: DialogTypeEnum | string;
+  start: Date | string;
+};
+
+/**
+ * Parameters that core-05 moved off the Dialog (to Session and Event Objects).
+ * Passing one to the Dialog constructor throws, so a 0.4.0 shaped Dialog cannot
+ * be built by accident. `transfer` is the 0.4.0 transfer details object.
+ */
+const REMOVED_PARAMS = [...LEGACY_DIALOG_PARAMS, 'transfer'];
+
+/** Legacy media Dialog types: built as `recording`. */
+const MEDIA_TYPE_ALIASES = ['audio', 'video'];
+
 /**
  * Dialog class representing a conversation segment.
- * Compliant with the current IETF vCon core draft (draft-ietf-vcon-vcon-core).
+ * Compliant with draft-ietf-vcon-vcon-core-05.
+ *
+ * Under core-05 a Dialog is a recording, text or incomplete (failed setup)
+ * segment. Transfers, party history and recording sets moved to Event and
+ * Session Objects. An empty Dialog (`{}`, see Dialog.placeholder()) holds an
+ * array position so Dialog indices stay stable.
  */
 export class Dialog implements Partial<DialogType> {
-  /** Valid dialog types per the vCon core draft */
-  static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'transfer', 'incomplete', 'recording-set'];
+  /** Valid dialog types per core-05 */
+  static readonly DIALOG_TYPES: DialogTypeEnum[] = ['recording', 'text', 'incomplete'];
 
   /** Valid dispositions for incomplete dialogs */
   static readonly DISPOSITIONS: DialogDisposition[] = [
@@ -38,34 +60,16 @@ export class Dialog implements Partial<DialogType> {
     'voicemail-no-message'
   ];
 
-  /** Supported MIME types for media content */
-  static readonly MIME_TYPES = [
-    'text/plain',
-    'audio/x-wav',
-    'audio/wav',
-    'audio/wave',
-    'audio/mpeg',
-    'audio/mp3',
-    'audio/ogg',
-    'audio/webm',
-    'audio/x-m4a',
-    'audio/aac',
-    'video/mp4',
-    'video/x-mp4',
-    'video/ogg',
-    'video/webm',
-    'multipart/mixed',
-    'message/rfc822',
-    'application/json'
-  ];
+  /** Supported MIME types for media content (text/*, message/* and multipart/* subtypes are also accepted) */
+  static readonly MIME_TYPES: string[] = DIALOG_MIME_TYPES;
 
   /** Valid encodings per vcon-core */
   static readonly VALID_ENCODINGS: Encoding[] = ['base64url', 'json', 'none'];
 
-  readonly type: DialogTypeEnum | string;
-  readonly start: Date | string;
-  parties?: number | number[];
-  originator?: number;
+  readonly type?: DialogTypeEnum | string;
+  readonly start?: Date | string;
+  /** Contributing parties (the Session lists the receivers) */
+  parties?: number | Array<number | number[] | null>;
   mediatype?: string;
   filename?: string;
   body?: string;
@@ -75,23 +79,15 @@ export class Dialog implements Partial<DialogType> {
   duration?: number;
   disposition?: DialogDisposition | string;
   session_id?: SessionId | SessionId[];
-  party_history?: PartyHistory[];
   application?: string;
   message_id?: string;
-  recordings?: number[];
-  recording_set?: number;
+  redacted_segments?: RedactedSegment[];
 
   // Legacy/extension fields
   /** @deprecated Use mediatype instead */
   mimetype?: string;
   alg?: string;
   signature?: string;
-  transferee?: number;
-  transferor?: number;
-  transfer_target?: number | number[];
-  original?: number | number[];
-  consultation?: number | number[];
-  target_dialog?: number | number[];
   provenance?: Record<string, any>;
   campaign?: string;
   interaction?: string;
@@ -99,11 +95,24 @@ export class Dialog implements Partial<DialogType> {
   meta?: Record<string, any>;
   [key: string]: any;
 
-  constructor(params: Partial<DialogType> & { type: DialogTypeEnum | string; start: Date | string }) {
-    this.type = params.type;
+  constructor(params: DialogParams) {
+    const removed = REMOVED_PARAMS.filter(k => params[k] !== undefined);
+    if (removed.length) {
+      throw new Error(
+        `Dialog parameter(s) ${removed.join(', ')} were removed in vCon 0.5.0: put the receivers and originator ` +
+          'on the Session, and record party history and transfers as Event Objects (see Event and PartyHistory.toEvent).'
+      );
+    }
+
+    let type = params.type;
+    if (typeof type === 'string' && MEDIA_TYPE_ALIASES.includes(type)) {
+      warn(`Dialog type '${type}' is not defined by core-05; building a 'recording' Dialog.`);
+      type = 'recording';
+    }
+    this.type = type;
     this.start = params.start;
 
-    // Copy parties - can be number or number[] per vcon-core
+    // Copy parties - number, list, nested list or null entries per core-05
     if (params.parties !== undefined) {
       this.parties = params.parties;
     }
@@ -121,11 +130,32 @@ export class Dialog implements Partial<DialogType> {
     }
   }
 
+  /**
+   * An empty Dialog Object (`{}`), which core-05 permits as a placeholder that
+   * holds an array position so that Dialog indices do not shift.
+   */
+  static placeholder(): Dialog {
+    return Object.create(Dialog.prototype) as Dialog;
+  }
+
+  /**
+   * Wrap an existing Dialog Object (for reading). Unlike the constructor this
+   * does not reject 0.4.0 parameters, so it can wrap a Dialog from an
+   * unmigrated vCon.
+   */
+  static fromDict(data: DialogType): Dialog {
+    return Object.assign(Object.create(Dialog.prototype), data) as Dialog;
+  }
+
+  /** True for an empty placeholder Dialog. */
+  isPlaceholder(): boolean {
+    return Object.keys(this.toDict()).length === 0;
+  }
+
   toDict(): DialogType {
-    const dict: DialogType = {
-      type: this.type,
-      start: this.start instanceof Date ? this.start.toISOString() : this.start
-    };
+    const dict: DialogType = {};
+    if (this.type !== undefined) dict.type = this.type;
+    if (this.start !== undefined) dict.start = this.start instanceof Date ? this.start.toISOString() : this.start;
 
     // Add parties if defined
     if (this.parties !== undefined) {
@@ -214,13 +244,6 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
-   * Check if dialog is a recording-set (a collection referencing recording dialogs)
-   */
-  isRecordingSet(): boolean {
-    return this.type === 'recording-set';
-  }
-
-  /**
    * Check if dialog is audio content
    */
   isAudio(): boolean {
@@ -252,10 +275,12 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
-   * Check if dialog is a transfer type
+   * @deprecated The transfer Dialog type was removed in 0.5.0; transfers are
+   * Events. Always returns false.
    */
   isTransfer(): boolean {
-    return this.type === 'transfer';
+    warn('Dialog.isTransfer() is deprecated: core-05 has no transfer Dialog; use transfer Events.');
+    return false;
   }
 
   /**
@@ -266,21 +291,35 @@ export class Dialog implements Partial<DialogType> {
   }
 
   /**
-   * Validate the dialog against vcon-core requirements
+   * Validate the dialog against core-05 requirements
    */
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
+    if (this.isPlaceholder()) {
+      return { valid: true, errors };
+    }
+
     if (!this.type) {
       errors.push('Dialog type is required');
+    } else if (!Dialog.DIALOG_TYPES.includes(this.type as DialogTypeEnum)) {
+      errors.push(`Invalid dialog type: ${this.type}. Must be one of: ${Dialog.DIALOG_TYPES.join(', ')}`);
     }
 
     if (!this.start) {
       errors.push('Dialog start time is required');
+    } else if (parseDateTime(this.start instanceof Date ? this.start.toISOString() : this.start) === undefined) {
+      errors.push('Dialog start must be an ISO 8601 datetime');
     }
 
-    if (this.type === 'incomplete' && !this.disposition) {
-      errors.push('Disposition is required for incomplete dialogs');
+    if (this.type === 'incomplete') {
+      if (!this.disposition) {
+        errors.push('Disposition is required for incomplete dialogs');
+      }
+      // An incomplete Dialog has no content (core-05 section 4.5).
+      for (const key of ['mediatype', 'filename', 'body', 'encoding', 'url', 'content_hash', 'message_id', 'redacted_segments']) {
+        if (this[key] !== undefined) errors.push(`Incomplete dialog MUST NOT include ${key}`);
+      }
     }
 
     if (this.disposition && !Dialog.DISPOSITIONS.includes(this.disposition as DialogDisposition)) {
@@ -295,8 +334,12 @@ export class Dialog implements Partial<DialogType> {
       errors.push(`Invalid encoding: ${this.encoding}. Must be one of: ${Dialog.VALID_ENCODINGS.join(', ')}`);
     }
 
-    // External media MUST carry content_hash (spec §4.3.x) and the hash
-    // format MUST be sha512-<base64url>.
+    if (this.mediatype !== undefined && !mediatypeOk(this.mediatype, Dialog.MIME_TYPES)) {
+      errors.push(`Invalid mediatype: ${this.mediatype}`);
+    }
+
+    // External media MUST carry content_hash and the hash format MUST be
+    // sha512-<base64url>.
     if (this.url !== undefined) {
       if (this.content_hash === undefined) {
         errors.push('Dialog with external url MUST include content_hash');
@@ -309,30 +352,6 @@ export class Dialog implements Partial<DialogType> {
           );
         }
       }
-    }
-
-    // transfer-type dialogs MUST NOT carry party-conversation fields or content
-    // (draft-ietf-vcon-vcon-core §4.3 transfer subtype).
-    if (this.type === 'transfer') {
-      const forbidden: Array<keyof DialogType> = ['parties', 'originator', 'mediatype', 'filename', 'body', 'url'];
-      for (const key of forbidden) {
-        if (this[key as string] !== undefined) {
-          errors.push(`Transfer dialog MUST NOT include ${String(key)}`);
-        }
-      }
-    }
-
-    if (this.party_history) {
-      this.party_history.forEach((entry, i) => {
-        if (!PartyHistoryClass.VALID_EVENTS.includes(entry.event)) {
-          errors.push(
-            `Invalid party_history[${i}].event: ${entry.event}. Must be one of: ${PartyHistoryClass.VALID_EVENTS.join(', ')}`
-          );
-        }
-        if ((entry.event === 'keydown' || entry.event === 'keyup') && !entry.button) {
-          errors.push(`party_history[${i}]: button is required for ${entry.event} events`);
-        }
-      });
     }
 
     return {
