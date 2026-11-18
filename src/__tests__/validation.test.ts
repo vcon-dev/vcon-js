@@ -1,7 +1,6 @@
 import { Vcon } from '../vcon';
 import { Dialog } from '../dialog';
 import { Attachment } from '../attachment';
-import { PartyHistory } from '../party';
 
 /**
  * Covers the validate() error branches on Dialog and Attachment that the
@@ -39,28 +38,21 @@ describe('Dialog.validate error branches', () => {
     expect(r.errors.some(e => /both inline .* and external/.test(e))).toBe(true);
   });
 
-  it('rejects content-bearing fields on a transfer dialog', () => {
-    const r = new Dialog({ type: 'transfer', start, parties: [0, 1], transferor: 0 }).validate();
-    expect(r.errors.some(e => /Transfer dialog MUST NOT include/.test(e))).toBe(true);
+  it('rejects an unknown dialog type such as the removed transfer type', () => {
+    const r = new Dialog({ type: 'transfer', start, parties: [0, 1] }).validate();
+    expect(r.errors.some(e => /Invalid dialog type: transfer/.test(e))).toBe(true);
   });
 
-  it('flags a party_history event missing its required button', () => {
-    const d = new Dialog({ type: 'recording', start, parties: [0] });
-    d.party_history = [new PartyHistory(0, 'keydown', start).toDict()];
-    const r = d.validate();
-    expect(r.errors.some(e => /button is required/.test(e))).toBe(true);
+  it('rejects a mediatype outside the known set', () => {
+    const r = new Dialog({ type: 'recording', start, parties: [0], mediatype: 'application/pdf' }).validate();
+    expect(r.errors.some(e => /Invalid mediatype/.test(e))).toBe(true);
   });
 });
 
 describe('Attachment.validate error branches', () => {
-  it('requires a purpose (non-lawful_basis)', () => {
+  it('requires a purpose', () => {
     const r = new Attachment({ party: 0, dialog: 0 }).validate();
     expect(r.errors.some(e => /must have a purpose/.test(e))).toBe(true);
-  });
-
-  it('accepts the lawful_basis extension without purpose', () => {
-    const r = new Attachment({ type: 'lawful_basis', party: 0, dialog: 0 } as any).validate();
-    expect(r.valid).toBe(true);
   });
 
   it('rejects external url without content_hash', () => {
@@ -78,15 +70,30 @@ describe('Vcon guards', () => {
     expect(() => Vcon.buildFromJson('{not json')).toThrow(/Failed to parse vCon JSON/);
   });
 
-  it('throws when setting redacted while amended is set', () => {
+  it('throws when setting redacted_from while amended_from is set', () => {
     const v = Vcon.buildNew();
-    v.amended = { uuid: '550e8400-e29b-41d4-a716-446655440000' };
-    expect(() => { v.redacted = { type: 'pii' }; }).toThrow(/mutually exclusive/);
+    v.amended_from = { uuid: '550e8400-e29b-41d4-a716-446655440000' };
+    expect(() => { v.redacted_from = { type: 'pii' }; }).toThrow(/mutually exclusive/);
   });
 
-  it('throws when setting amended while redacted is set', () => {
+  it('throws when setting amended_from while redacted_from is set', () => {
     const v = Vcon.buildNew();
-    v.redacted = { type: 'pii' };
-    expect(() => { v.amended = { uuid: '550e8400-e29b-41d4-a716-446655440000' }; }).toThrow(/mutually exclusive/);
+    v.redacted_from = { type: 'pii' };
+    expect(() => { v.amended_from = { uuid: '550e8400-e29b-41d4-a716-446655440000' }; }).toThrow(/mutually exclusive/);
+  });
+});
+
+describe('parseDateTime', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { parseDateTime, parseDateTimeMicros } = require('../util');
+  it('rejects out-of-range fields instead of rolling them over', () => {
+    for (const v of ['2022-02-30T00:00:00Z', '2021-02-29T00:00:00Z', '2022-01-01T24:00:00Z', '2022-01-01T00:60:00Z', '2022-01-01T00:00:00+24:00']) {
+      expect(parseDateTime(v)).toBeUndefined();
+    }
+    expect(parseDateTime('2024-02-29T00:00:00Z')).toBe(Date.parse('2024-02-29T00:00:00Z'));
+  });
+  it('keeps microseconds and applies offsets', () => {
+    expect(parseDateTimeMicros('2022-01-01T05:00:00.1234567+05:00')).toBe(Date.parse('2022-01-01T00:00:00Z') * 1000 + 123456);
+    expect(parseDateTimeMicros('2022-01-01T00:00:00')).toBe(Date.parse('2022-01-01T00:00:00Z') * 1000);
   });
 });

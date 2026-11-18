@@ -7,7 +7,12 @@ function isValidContentHash(value: string): boolean {
 
 /**
  * Attachment class for representing attached files in a vCon.
- * Compliant with IETF draft-ietf-vcon-vcon-core
+ * Compliant with draft-ietf-vcon-vcon-core-05.
+ *
+ * An attachment has `party` plus `dialog` (a single index) or `session` (an
+ * index or list). The class never defaults the scope: the right index depends
+ * on the vCon. Vcon.addAttachment() defaults it only when the vCon has
+ * exactly one Session.
  */
 export class Attachment implements Partial<AttachmentType> {
   /** Valid encodings per vcon-core */
@@ -16,7 +21,8 @@ export class Attachment implements Partial<AttachmentType> {
   purpose?: string;
   start?: Date | string;
   party?: number;
-  dialog?: number | number[];
+  dialog?: number;
+  session?: number | number[];
   mediatype?: string;
   filename?: string;
   body?: any;
@@ -34,10 +40,10 @@ export class Attachment implements Partial<AttachmentType> {
 
     Object.assign(this, params);
 
-    // Default party/dialog to 0 (vCon-level) when omitted — spec requires
-    // both indices on every attachment.
+    // party defaults to 0 (the tags convention). dialog and session are NOT
+    // defaulted: core-05 needs at least one of them, and the right value
+    // depends on the vCon.
     if (this.party === undefined) this.party = 0;
-    if (this.dialog === undefined) this.dialog = 0;
 
     if (params.body !== undefined && !params.encoding) {
       this.encoding = 'none';
@@ -122,20 +128,18 @@ export class Attachment implements Partial<AttachmentType> {
   validate(): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // Core spec requires `purpose`. The one extension exception is the
-    // lawful_basis attachment (draft-howe-vcon-lawful-basis), which uses
-    // `type: "lawful_basis"`.
-    const extType = (this as any).type;
-    const isLawfulBasisExt = extType === 'lawful_basis';
-    if (!this.purpose && !isLawfulBasisExt) {
-      errors.push('Attachment must have a purpose (or be the lawful_basis extension)');
+    if (!this.purpose) {
+      errors.push('Attachment must have a purpose');
     }
 
-    if (this.party === undefined) {
-      errors.push('Attachment.party is required (use 0 for vCon-level)');
+    if (!this.start) {
+      errors.push('Attachment.start is required');
     }
-    if (this.dialog === undefined) {
-      errors.push('Attachment.dialog is required (use 0 for vCon-level)');
+    if (this.party === undefined) {
+      errors.push('Attachment.party is required');
+    }
+    if (this.dialog === undefined && this.session === undefined) {
+      errors.push('Attachment needs at least one of dialog or session');
     }
 
     // Cannot have both inline and external data

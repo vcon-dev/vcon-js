@@ -1,4 +1,4 @@
-import { Vcon, Party, Dialog } from '../src';
+import { Vcon, Party, Dialog, Session } from '../src';
 
 // Create a new vCon
 const vcon = Vcon.buildNew();
@@ -19,62 +19,62 @@ const agent = new Party({
 vcon.addParty(caller);
 vcon.addParty(agent);
 
-// Add a text dialog (initial request)
+// Core-05 groups Dialogs in a Session: the receivers are the Session parties
+const session = vcon.addSession(new Session({ start: new Date(), parties: [0, 1] }));
+
+// Add a text dialog (initial request). The sender is the Dialog party.
 const textDialog = new Dialog({
-  type: 'text/plain',
+  type: 'text',
   start: new Date(),
-  parties: [0, 1],
-  originator: 0,
+  parties: [0],
   body: 'I need to schedule a video call for technical support.',
-  mimetype: 'text/plain'
+  mediatype: 'text/plain',
+  encoding: 'none'
 });
 
-vcon.addDialog(textDialog);
+vcon.addDialog(textDialog, session);
 
-// Add an audio dialog (phone call)
+// Add an audio recording (phone call). Core-05 has one 'recording' type for
+// audio and video; the media type says which.
 const audioDialog = new Dialog({
-  type: 'audio/wav',
+  type: 'recording',
   start: new Date(Date.now() + 1000), // 1 second later
   parties: [0, 1],
-  originator: 0,
-  mimetype: 'audio/wav',
-  filename: 'call-recording.wav',
   duration: 300 // 5 minutes
 });
 
-// Add external audio data
+// Add external audio data (url, media type, then options)
 audioDialog.addExternalData(
   'https://example.com/recordings/call-recording.wav',
-  'call-recording.wav',
-  'audio/wav'
+  'audio/wav',
+  {
+    filename: 'call-recording.wav',
+    content_hash: 'sha512-Tf9OoDQfCoI_FdP08BqxLq4OXaV5zLhR-NvZ3-hMWLLN7iZA50Dh7hctp5Om55Vg5ff5vQWKEqKAQz7W-kZRCg'
+  }
 );
 
-vcon.addDialog(audioDialog);
+vcon.addDialog(audioDialog, session);
 
-// Add a video dialog (screen sharing)
+// Add a video recording (screen sharing)
 const videoDialog = new Dialog({
-  type: 'video/mp4',
+  type: 'recording',
   start: new Date(Date.now() + 310000), // 5 minutes and 10 seconds later
-  parties: [0, 1],
-  originator: 1,
-  mimetype: 'video/mp4',
-  filename: 'screen-sharing.mp4',
+  parties: [1], // Jane shares her screen
   duration: 600 // 10 minutes
 });
 
-// Add inline video data (base64 encoded)
-videoDialog.addInlineData(
-  'base64EncodedVideoContent',
-  'screen-sharing.mp4',
-  'video/mp4'
-);
+// Add inline video data (base64url encoded)
+videoDialog.addInlineData('base64urlEncodedVideoContent', 'video/mp4', {
+  encoding: 'base64url',
+  filename: 'screen-sharing.mp4'
+});
 
-vcon.addDialog(videoDialog);
+vcon.addDialog(videoDialog, session);
 
 // Add analysis for audio sentiment
 vcon.addAnalysis({
   type: 'sentiment',
-  dialog: 1, // Analyze the audio dialog
+  dialog: 1, // Analyze the audio dialog (index 1)
   vendor: 'sentiment-analyzer',
   body: {
     score: 0.7,
@@ -111,6 +111,11 @@ console.log('Video dialog:', videoDialog.isVideo()); // true
 // Check data storage
 console.log('Audio is external:', audioDialog.isExternalData()); // true
 console.log('Video is inline:', videoDialog.isInlineData()); // true
+
+// Validate against core-05
+console.log('Valid:', vcon.isValid());
+// No lawful basis is recorded here; add a purpose "lawful_basis" attachment for real use.
+console.log('Has lawful basis:', vcon.hasLawfulBasis());
 
 // Convert to JSON
 const json = vcon.toJson();

@@ -11,10 +11,15 @@ This library provides a complete implementation of the vCon specification for Ja
 ```
 src/
 ├── types.ts        # TypeScript type definitions for vcon-core
-├── vcon.ts         # Main Vcon class for managing conversation containers
-├── party.ts        # Party and PartyHistory classes
+├── vcon.ts         # Main Vcon class: model, validation entry point, JWS sign/verify
+├── party.ts        # Party and (deprecated) PartyHistory classes
 ├── dialog.ts       # Dialog class for conversation segments
+├── session.ts      # Session and SessionReference, validateSession
+├── event.ts        # Event class, the per-type parameter table, validateEvent
 ├── attachment.ts   # Attachment class for related files
+├── validation.ts   # validateVconDict: the core-05 structural checks behind Vcon.isValid()
+├── migration.ts    # migrate040To050 and MigrationReport (Appendix A.1)
+├── util.ts         # Shared helpers (date parsing, base64url, warnings)
 ├── index.ts        # Public API exports
 └── __tests__/      # Jest test files
     ├── vcon.test.ts
@@ -36,16 +41,18 @@ The main container class. Use `Vcon.buildNew()` to create a new vCon or `Vcon.bu
 Represents conversation participants with identifiers (tel, sip, mailto, stir, did, uuid) and metadata.
 
 ### Dialog
-Represents conversation segments. Five types per vcon-core: `recording`, `text`, `transfer`, `incomplete`, `recording-set`.
+Represents conversation segments. Three types per core-05: `recording`, `text`, `incomplete`. `{}` is a valid placeholder (`Dialog.placeholder()`). Transfers, party history and recording sets are Event and Session Objects now.
 
 ### Attachment
 Represents attached files. Can be inline (body/encoding) or external (url/content_hash).
 
 ## vcon-core Compliance
 
-The library implements draft-ietf-vcon-vcon-core (syntax `"0.4.0"`):
+The library implements draft-ietf-vcon-vcon-core-05 (syntax `"0.5.0"`; 0.4.0 is read and migrated):
 
-- **Dialog types**: recording, text, transfer, incomplete, recording-set
+- **Dialog types**: recording, text, incomplete (audio/video accepted on read with a warning, never written)
+- **Sessions and Events**: top-level `sessions` and `events`; a Session must exist when there is dialog or events
+- **Attachments**: `party` plus `dialog` or `session`; scope is never invented
 - **Dispositions** (for incomplete): no-answer, congestion, failed, busy, hung-up, voicemail-no-message
 - **Encodings**: base64url, json, none (note: base64 is NOT valid per spec)
 - **Extensions**: support for `extensions` and `critical` arrays
@@ -55,9 +62,11 @@ The library implements draft-ietf-vcon-vcon-core (syntax `"0.4.0"`):
 ### Compliance non-negotiables baked into the library
 
 - **Analysis body is a string.** `addAnalysis` auto-`JSON.stringify`s object/array bodies and forces `encoding: "json"`.
-- **Attachments use `purpose`** (the `type` field has been removed). `party` and `dialog` indices default to `0` (vCon-level) when omitted.
-- **Tags are attachments.** `vcon.addTag(k, v)` writes to a single `purpose: "tags"` attachment with `encoding: "json"`. `vcon.tags` and `vcon.getTag(k)` read the decoded body back out — there is no top-level `tags` field on the emitted JSON.
-- **`redacted` and `amended` are mutually exclusive** — assigning one while the other is set throws.
+- **Attachments use `purpose`** (the `type` field has been removed). `party` defaults to `0`; `dialog` or `session` is required and defaulted only when the vCon has exactly one Session.
+- **Tags are attachments.** `vcon.addTag(k, v)` writes to a single `purpose: "tags"` attachment with `encoding: "json"`, scoped to every Session. `vcon.tags` and `vcon.getTag(k)` read the decoded body back out — there is no top-level `tags` field on the emitted JSON.
+- **`redacted_from` and `amended_from` are mutually exclusive** — assigning one while the other is set throws. `redacted` and `amended` are deprecated aliases.
+- **JWS `alg` "none" is rejected** by `sign()` and `verify()`.
+- **0.4.0 input is migrated on load** (`migrate040To050`); signed 0.4.0 input is not.
 - **`group` has been removed** from the public surface (spec reserves it).
 - **`content_hash` format** is checked by `Dialog.validate()` and `Attachment.validate()`.
 

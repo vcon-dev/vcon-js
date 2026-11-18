@@ -1,4 +1,6 @@
 import { Party as PartyType, CivicAddress, PartyHistory as PartyHistoryType } from './types';
+import { Event } from './event';
+import { warn } from './util';
 
 /**
  * Party class representing a conversation participant.
@@ -74,8 +76,11 @@ export class Party implements PartyType {
 }
 
 /**
- * PartyHistory class for tracking party state changes within a dialog.
- * Compliant with IETF draft-ietf-vcon-vcon-core
+ * PartyHistory class: the 0.4.0 party history entry of a Dialog.
+ *
+ * @deprecated core-05 removed `party_history` from the Dialog. A party history
+ * entry is an Event Object whose `sessions` lists the Session(s) it applies to.
+ * Constructing a PartyHistory warns; convert it with toEvent().
  */
 export class PartyHistory implements PartyHistoryType {
   /** Valid party history events per vcon-core Section 4.3.11.1 */
@@ -96,6 +101,7 @@ export class PartyHistory implements PartyHistoryType {
   readonly button?: string;
 
   constructor(party: number, event: string, time: Date | string, button?: string) {
+    warn('PartyHistory is deprecated: core-05 has no Dialog party_history; use an Event (PartyHistory.toEvent).');
     this.party = party;
     this.event = event;
     this.time = time;
@@ -112,7 +118,7 @@ export class PartyHistory implements PartyHistoryType {
   }
 
   /**
-   * Convert to plain object with ISO timestamp
+   * Convert to plain object with ISO timestamp (the 0.4.0 shape)
    */
   toDict(): PartyHistoryType {
     const result: PartyHistoryType = {
@@ -124,6 +130,20 @@ export class PartyHistory implements PartyHistoryType {
       result.button = this.button;
     }
     return result;
+  }
+
+  /**
+   * Convert to a core-05 Event. `sessions` is the Session index or indices the
+   * entry applies to (the Sessions that list the Dialog it came from).
+   */
+  toEvent(sessions: number | number[]): Event {
+    return new Event({
+      type: this.event,
+      time: this.time,
+      sessions,
+      party: this.party,
+      ...(this.button !== undefined ? { button: this.button } : {})
+    });
   }
 
   /**

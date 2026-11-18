@@ -1,16 +1,15 @@
 /**
  * vCon Type Definitions
- * Compliant with the current IETF vCon core draft (draft-ietf-vcon-vcon-core,
- * -latest; syntax parameter "0.4.0"). Tracks the authoritative
- * vcon_json_schema.json in the draft repo.
+ * Compliant with draft-ietf-vcon-vcon-core-05 (syntax parameter "0.5.0").
+ * Tracks the Appendix C JSON Schema of that draft.
  * https://datatracker.ietf.org/doc/html/draft-ietf-vcon-vcon-core
  */
 
 /** Valid encoding types for inline content */
 export type Encoding = 'base64url' | 'json' | 'none';
 
-/** Dialog types as defined in the vCon core draft (incl. recording-set) */
-export type DialogType = 'recording' | 'text' | 'transfer' | 'incomplete' | 'recording-set';
+/** Dialog types defined by core-05. Transfers and recording sets are Events and Sessions now. */
+export type DialogType = 'recording' | 'text' | 'incomplete';
 
 /** Disposition values for incomplete dialogs */
 export type DialogDisposition = 'no-answer' | 'congestion' | 'failed' | 'busy' | 'hung-up' | 'voicemail-no-message';
@@ -29,7 +28,10 @@ export interface SessionId {
   remote: string;
 }
 
-/** Party history event for tracking party state changes */
+/**
+ * Party history entry of a 0.4.0 Dialog.
+ * @deprecated Removed from the Dialog in 0.5.0; use an Event (see PartyHistory.toEvent).
+ */
 export interface PartyHistory {
   /** Index of the party for this event */
   party: number;
@@ -123,16 +125,33 @@ export interface Party {
   [key: string]: any;
 }
 
-/** Dialog object representing a conversation segment */
+/** Redacted segment of a Dialog's content (core-05 section 4.5) */
+export interface RedactedSegment {
+  /** Start of the redacted segment (offset into the content) */
+  start: number;
+  /** End of the redacted segment (offset into the content) */
+  end: number;
+  [key: string]: any;
+}
+
+/**
+ * Dialog object representing a conversation segment.
+ *
+ * Under core-05 an empty Dialog (`{}`) is a valid placeholder that holds an
+ * array position, so `type` is optional on the wire; the Dialog class always
+ * sets it unless built with Dialog.placeholder().
+ */
 export interface Dialog {
-  /** Dialog type: 'recording', 'text', 'transfer', 'incomplete', or 'recording-set' */
-  type: DialogType | string;
+  /** Dialog type: 'recording', 'text' or 'incomplete' (or an extension value) */
+  type?: DialogType | string;
   /** Start time of dialog segment (RFC3339 format) */
-  start: Date | string;
-  /** Party indices contributing to dialog */
-  parties?: number | number[];
-  /** Originator party index if not first in parties list */
-  originator?: number;
+  start?: Date | string;
+  /**
+   * Contributing party indices. An entry may be an index, a list of indices
+   * (several contributors on one channel) or null (a channel with no
+   * contributor). The receivers are the `parties` of the Session.
+   */
+  parties?: number | Array<number | number[] | null>;
   /** Media type string (MIME type) */
   mediatype?: string;
   /** Original filename */
@@ -143,16 +162,12 @@ export interface Dialog {
   disposition?: DialogDisposition | string;
   /** Session identifier object(s) */
   session_id?: SessionId | SessionId[];
-  /** Party event history */
-  party_history?: PartyHistory[];
   /** Application identifier */
   application?: string;
   /** Message identifier for cross-referencing (e.g., SMTP message-id) */
   message_id?: string;
-  /** recording-set: indices of the recording Dialog Objects in this set */
-  recordings?: number[];
-  /** Index of the recording-set Dialog Object this recording belongs to */
-  recording_set?: number;
+  /** Segments of the content that were redacted */
+  redacted_segments?: RedactedSegment[];
 
   // Inline content (mutually exclusive with url/content_hash)
   /** Inline content body */
@@ -173,18 +188,6 @@ export interface Dialog {
   alg?: string;
   /** Digital signature */
   signature?: string;
-  /** Transfer target party index */
-  transferee?: number;
-  /** Transfer source party index */
-  transferor?: number;
-  /** Transfer target party index/indices */
-  transfer_target?: number | number[];
-  /** Original dialog index/indices */
-  original?: number | number[];
-  /** Consultation dialog index/indices */
-  consultation?: number | number[];
-  /** Target dialog index/indices */
-  target_dialog?: number | number[];
   /** Generation provenance (draft-howe-vcon-provenance) for machine-generated dialog */
   provenance?: Record<string, any>;
   /** Campaign identifier (contact center extension) */
@@ -199,14 +202,88 @@ export interface Dialog {
   [key: string]: any;
 }
 
+/** Relationship types between Sessions (core-05 section 4.2.8.2) */
+export type SessionReferenceType = 'child' | 'peer' | 'precursor' | 'breakout';
+
+/** Session_Reference Object: how another Session relates to this one */
+export interface SessionReference {
+  /** Index of the referenced Session */
+  session: number;
+  /** child, peer, precursor, breakout, or a value defined by an extension */
+  type: SessionReferenceType | string;
+  description?: string;
+}
+
+/**
+ * Session Object (core-05 section 4.2). A Session with no parameters is valid.
+ * The Dialog and Event Objects of a conversation hang off a Session.
+ */
+export interface Session {
+  /** Start of the session (SHOULD be present) */
+  start?: Date | string;
+  /** Duration in seconds; absent means the session has no end */
+  duration?: number;
+  /** Receivers. The first party is the implied originator. */
+  parties?: number[];
+  /** Originator index, only when it is not the first party */
+  originator?: number;
+  session_id?: SessionId;
+  /** Relationships to other Sessions */
+  sessions?: SessionReference[];
+  /** Indices of the Dialog Objects in the session */
+  dialog?: number[];
+  [key: string]: any;
+}
+
+/** Event types defined by core-05 (section 4.3.1) */
+export type EventType =
+  | 'join' | 'drop' | 'hold' | 'unhold' | 'mute' | 'unmute'
+  | 'keydown' | 'keyup'
+  | 'consultation-start' | 'blind-transfer' | 'consultative-transfer' | 'transfer-abandoned'
+  | 'channel-contributors';
+
+/** Event Object (core-05 section 4.3). Per-type parameter rules are in event.ts. */
+export interface Event {
+  /** Event type token, or a value defined by an extension */
+  type: EventType | string;
+  /** When the event occurred (RFC3339) */
+  time: Date | string;
+  /** Session index or indices the event applies to (not for channel-contributors) */
+  sessions?: number | number[];
+  /** Party index (the Transferor for transfer types) */
+  party?: number;
+  /** Dialog index (channel-contributors; SHOULD NOT be present otherwise) */
+  dialog?: number | number[];
+  /** Channel index (channel-contributors) */
+  channel?: number;
+  /** Contributing party index, indices, or null for no contributor (channel-contributors) */
+  contributors?: number | number[] | null;
+  /** DTMF digit or key label (keydown, keyup) */
+  button?: string;
+  /** Party index of the Transferee (transfer types) */
+  transferee?: number;
+  /** Party index of the Transfer Target (transfer types) */
+  transfer_target?: number;
+  /** Session index of the consultation call */
+  consultation?: number;
+  /** Session index of the target call */
+  target_session?: number;
+  /** Parameters defined by an extension */
+  [key: string]: any;
+}
+
 /** Analysis object for analytical results */
 export interface Analysis {
   /** Analysis type identifier (e.g., report, sentiment, summary, transcript, translation, tts) */
   type: string;
   /** Dialog index/indices analyzed (optional; analysis may key off `attachment` instead) */
   dialog?: number | number[];
+  /** Session index/indices this analysis is based on */
+  sessions?: number | number[];
   /** Attachment index/indices this analysis is based on */
   attachment?: number | number[];
+  /** Other Analysis index/indices this analysis is based on (never itself) */
+  analysis?: number | number[];
   /** Vendor name (REQUIRED per core schema) */
   vendor?: string;
   /** Product name */
@@ -250,23 +327,25 @@ export interface Analysis {
 /**
  * Attachment object for related files.
  *
- * Per draft-ietf-vcon-vcon-core §4.5, core attachments use `purpose`
- * (not `type`); `party` and `dialog` indices are REQUIRED. For vCon-level
- * attachments where no specific party/dialog applies, use 0/0.
+ * Per core-05 section 4.6, `purpose`, `start` and `party` are set, plus at
+ * least one of `dialog` (a single index) or `session` (an index or list).
+ * The library never invents the scope: Vcon.addAttachment() defaults it only
+ * when the vCon has exactly one Session.
  *
- * One spec-defined exception: the `lawful_basis` extension attachment
- * (draft-howe-vcon-lawful-basis) uses `type: "lawful_basis"`. Callers
- * needing that shape must attach it via the catch-all index signature.
+ * The lawful_basis extension attachment (draft-howe-vcon-lawful-basis) uses
+ * `purpose: "lawful_basis"`, scoped with `party` plus `session`.
  */
 export interface Attachment {
   /** Purpose/category of attachment (e.g. "tags", "transcript", "consent") */
   purpose?: string;
   /** Reference time */
   start?: Date | string;
-  /** Related party index (REQUIRED; use 0 for vCon-level) */
+  /** Index of the party that contributed the attachment */
   party?: number;
-  /** Related dialog index (REQUIRED; use 0 for vCon-level) */
-  dialog?: number | number[];
+  /** Related dialog index */
+  dialog?: number;
+  /** Related Session index or indices */
+  session?: number | number[];
   /** Media type */
   mediatype?: string;
   /** Original filename */
@@ -284,11 +363,11 @@ export interface Attachment {
   /** Content hash for externally referenced files (single or array for multiple algorithms) */
   content_hash?: string | string[];
 
-  /** Allow additional properties for extensions (incl. the lawful_basis `type` field) */
+  /** Allow additional properties for extensions */
   [key: string]: any;
 }
 
-/** Redacted object reference per Section 4.1.8.1 */
+/** redacted_from object: reference to the unredacted vCon (core-05 section 4.1.8) */
 export interface Redacted {
   /** UUID of original unredacted vCon */
   uuid?: string;
@@ -300,7 +379,7 @@ export interface Redacted {
   content_hash?: string | string[];
 }
 
-/** Amended object reference per Section 4.1.9.1 */
+/** amended_from object: reference to the prior vCon version (core-05 section 4.1.9) */
 export interface Amended {
   /** UUID of prior vCon instance version */
   uuid?: string;
@@ -313,7 +392,7 @@ export interface Amended {
 export interface VconData {
   /** Globally unique identifier (preferably UUID v8) */
   uuid?: string;
-  /** vCon version string (deprecated in favor of extensions) */
+  /** vCon syntax version. Optional; "0.5.0" for vCons this library writes. */
   vcon?: string;
   /** Conversation subject */
   subject?: string;
@@ -323,23 +402,53 @@ export interface VconData {
   updated_at?: Date | string;
   /** Array of parties in the conversation (mandatory) */
   parties?: Party[];
-  /** Array of dialog segments */
+  /** Array of Session Objects; at least one when dialog or events are non-empty */
+  sessions?: Session[];
+  /** Array of Event Objects */
+  events?: Event[];
+  /** Array of dialog segments. An empty object is a valid placeholder. */
   dialog?: Dialog[];
   /** Array of attachments */
   attachments?: Attachment[];
   /** Array of analysis results */
   analysis?: Analysis[];
-  /** Reference to redacted version */
-  redacted?: Redacted | boolean;
-  /** Reference to amended version */
-  amended?: Amended | boolean;
-  /** Names of non-core extensions used */
+  /** Reference to the unredacted vCon (exclusive with amended_from) */
+  redacted_from?: Redacted;
+  /** Reference to the prior vCon version (exclusive with redacted_from) */
+  amended_from?: Amended;
+  /** Redacted substrings, referenced as __REDACTED_REF_n in text */
+  redacted_strings?: RedactedString[];
+  /** Names of non-core extensions used. MUST list every extension in use. */
   extensions?: string[];
   /** Incompatible extension names requiring explicit support */
   critical?: string[];
   /** Additional metadata */
   meta?: Record<string, any>;
+  /** JWS general serialization: base64url payload, set by Vcon.sign() */
+  payload?: string;
+  /** JWS signatures, set by Vcon.sign() */
+  signatures?: JwsSignature[];
 }
 
-/** vCon version constant for vcon-core (note: vcon parameter is DEPRECATED per Section 4.1.1) */
-export const VCON_VERSION = '0.4.0';
+/** One signature of a JWS general serialization */
+export interface JwsSignature {
+  /** base64url JWS protected header */
+  protected?: string;
+  /** Unprotected header */
+  header?: Record<string, any>;
+  /** base64url signature */
+  signature: string;
+}
+
+/** Entry of redacted_strings (core-05 section 4.1.16) */
+export interface RedactedString {
+  /** Reference number, 1 to 99999 */
+  ref: number;
+  [key: string]: any;
+}
+
+/** vCon syntax version this library writes. Readers also accept "0.4.0" and migrate it. */
+export const VCON_VERSION = '0.5.0';
+
+/** Syntax version of the previous core draft, accepted on read and migrated. */
+export const LEGACY_VCON_VERSION = '0.4.0';

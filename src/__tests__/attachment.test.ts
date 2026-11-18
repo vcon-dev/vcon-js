@@ -62,11 +62,19 @@ describe('Attachment', () => {
     }).toThrow('Invalid encoding: base64. Must be one of base64url, json, none');
   });
 
-  it('should default party and dialog to 0 (vCon-level) when omitted', () => {
+  it('should default party to 0 but never default dialog or session', () => {
     const attachment = new Attachment({ purpose: 'tags', body: '{}' });
 
     expect(attachment.party).toBe(0);
-    expect(attachment.dialog).toBe(0);
+    expect(attachment.dialog).toBeUndefined();
+    expect(attachment.session).toBeUndefined();
+    expect(attachment.validate().errors).toContain('Attachment needs at least one of dialog or session');
+  });
+
+  it('should accept a session index or list as the scope', () => {
+    const a = new Attachment({ purpose: 'note', start: '2026-01-01T00:00:00Z', session: [0, 1], body: 'x' });
+    expect(a.validate().valid).toBe(true);
+    expect(a.toDict().session).toEqual([0, 1]);
   });
 
   it('should have valid encodings constant', () => {
@@ -113,7 +121,8 @@ describe('Attachment', () => {
       purpose: 'contract',
       start,
       party: 0,
-      dialog: [0, 1],
+      dialog: 1,
+      session: [0, 1],
       mediatype: 'application/pdf',
       filename: 'contract.pdf',
       body: 'base64content',
@@ -123,7 +132,8 @@ describe('Attachment', () => {
     expect(attachment.purpose).toBe('contract');
     expect(attachment.start).toBe(start);
     expect(attachment.party).toBe(0);
-    expect(attachment.dialog).toEqual([0, 1]);
+    expect(attachment.dialog).toBe(1);
+    expect(attachment.session).toEqual([0, 1]);
     expect(attachment.mediatype).toBe('application/pdf');
     expect(attachment.filename).toBe('contract.pdf');
   });
@@ -141,20 +151,15 @@ describe('Attachment', () => {
   });
 
   it('should validate attachment correctly', () => {
-    // Valid attachment with purpose (party/dialog default to 0)
-    const validWithPurpose = new Attachment({ purpose: 'transcript', body: 'content' });
+    // Valid attachment: purpose, start, party (defaults to 0) and a scope
+    const validWithPurpose = new Attachment({ purpose: 'transcript', body: 'content', start: '2026-01-01T00:00:00Z', dialog: 0 });
     expect(validWithPurpose.validate().valid).toBe(true);
 
-    // Valid lawful_basis extension attachment (the one allowed `type:` exception)
-    const lawfulBasis = new Attachment({ body: '{}' } as any);
-    (lawfulBasis as any).type = 'lawful_basis';
-    expect(lawfulBasis.validate().valid).toBe(true);
-
     // Invalid - no purpose
-    const noPurpose = new Attachment({ body: 'content' });
+    const noPurpose = new Attachment({ body: 'content', start: '2026-01-01T00:00:00Z', dialog: 0 });
     const result1 = noPurpose.validate();
     expect(result1.valid).toBe(false);
-    expect(result1.errors).toContain('Attachment must have a purpose (or be the lawful_basis extension)');
+    expect(result1.errors).toContain('Attachment must have a purpose');
 
     // Invalid - both inline and external data
     const bothData = new Attachment({

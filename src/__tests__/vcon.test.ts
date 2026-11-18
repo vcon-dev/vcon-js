@@ -86,6 +86,7 @@ describe('Vcon', () => {
 
   it('should add attachments with new API', () => {
     const vcon = Vcon.buildNew();
+    vcon.addSession({ parties: [0] });
     vcon.addAttachment({
       purpose: 'document',
       mediatype: 'application/pdf',
@@ -105,6 +106,7 @@ describe('Vcon', () => {
   it('should find attachments by purpose', () => {
     const vcon = Vcon.buildNew();
     vcon.addAttachment({
+      dialog: 0,
       purpose: 'transcript',
       body: 'Transcript content',
       mediatype: 'text/plain'
@@ -151,7 +153,10 @@ describe('Vcon', () => {
     expect(tagsAttachments.length).toBe(1);
     const att = tagsAttachments[0];
     expect(att.party).toBe(0);
-    expect(att.dialog).toBe(0);
+    // whole-vCon metadata lists every Session; a placeholder Session is added when there is none
+    expect(att.dialog).toBeUndefined();
+    expect(att.session).toEqual([0]);
+    expect(vcon.sessions).toEqual([{}]);
     expect(att.encoding).toBe('json');
     expect(typeof att.body).toBe('string');
     expect(JSON.parse(att.body as string)).toEqual({ category: 'support', priority: 'high' });
@@ -229,23 +234,34 @@ describe('Vcon extensions (vcon-core)', () => {
     expect(vcon.critical).toContain('encrypted');
   });
 
-  it('should handle redacted property', () => {
+  it('should handle redacted_from property', () => {
     const vcon = Vcon.buildNew();
-    expect(vcon.redacted).toBeUndefined();
+    expect(vcon.redacted_from).toBeUndefined();
 
-    vcon.redacted = { uuid: 'original-uuid' };
-    expect(vcon.redacted).toEqual({ uuid: 'original-uuid' });
-
-    vcon.redacted = true;
-    expect(vcon.redacted).toBe(true);
+    vcon.redacted_from = { uuid: 'original-uuid', type: 'pii' };
+    expect(vcon.redacted_from).toEqual({ uuid: 'original-uuid', type: 'pii' });
+    expect((vcon.toDict() as any).redacted).toBeUndefined();
   });
 
-  it('should handle amended property', () => {
+  it('should handle amended_from property', () => {
     const vcon = Vcon.buildNew();
-    expect(vcon.amended).toBeUndefined();
+    expect(vcon.amended_from).toBeUndefined();
 
-    vcon.amended = { uuid: 'amended-uuid' };
-    expect(vcon.amended).toEqual({ uuid: 'amended-uuid' });
+    vcon.amended_from = { uuid: 'amended-uuid' };
+    expect(vcon.amended_from).toEqual({ uuid: 'amended-uuid' });
+  });
+
+  it('keeps redacted and amended as deprecated aliases', () => {
+    const spy = jest.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+    try {
+      const vcon = Vcon.buildNew();
+      vcon.redacted = { uuid: 'original-uuid', type: 'pii' };
+      expect(vcon.redacted_from).toEqual({ uuid: 'original-uuid', type: 'pii' });
+      expect(vcon.redacted).toEqual({ uuid: 'original-uuid', type: 'pii' });
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
 });
@@ -372,21 +388,22 @@ describe('Vcon analysis with vcon-core fields', () => {
 });
 
 describe('Vcon vcon-core specific features', () => {
-  it('should have VCON_VERSION as 0.4.0', () => {
-    expect(VCON_VERSION).toBe('0.4.0');
+  it('should have VCON_VERSION as 0.5.0 and emit it', () => {
+    expect(VCON_VERSION).toBe('0.5.0');
+    expect(JSON.parse(Vcon.buildNew().toJson()).vcon).toBe('0.5.0');
   });
 
-  it('should handle redacted with type and content_hash (vcon-core)', () => {
+  it('should handle redacted_from with type and content_hash (vcon-core)', () => {
     const vcon = Vcon.buildNew();
     
-    vcon.redacted = { 
+    vcon.redacted_from = { 
       uuid: 'original-uuid',
       type: 'pii-masked',
       url: 'https://example.com/original.vcon',
       content_hash: 'sha512-abc123'
     };
     
-    expect(vcon.redacted).toEqual({ 
+    expect(vcon.redacted_from).toEqual({ 
       uuid: 'original-uuid',
       type: 'pii-masked',
       url: 'https://example.com/original.vcon',
@@ -394,16 +411,16 @@ describe('Vcon vcon-core specific features', () => {
     });
   });
 
-  it('should handle amended with url and content_hash (vcon-core)', () => {
+  it('should handle amended_from with url and content_hash (vcon-core)', () => {
     const vcon = Vcon.buildNew();
     
-    vcon.amended = { 
+    vcon.amended_from = { 
       uuid: 'prior-uuid',
       url: 'https://example.com/prior.vcon',
       content_hash: ['sha512-abc', 'sha256-def']
     };
     
-    expect(vcon.amended).toEqual({ 
+    expect(vcon.amended_from).toEqual({ 
       uuid: 'prior-uuid',
       url: 'https://example.com/prior.vcon',
       content_hash: ['sha512-abc', 'sha256-def']

@@ -5,7 +5,8 @@
  * with transcription and sentiment analysis.
  *
  * Key concepts covered:
- * - Recording type dialogs
+ * - Recording type dialogs inside a Session
+ * - Party events (join, hold, drop) as Event Objects
  * - External media references with content_hash
  * - Adding transcription analysis
  * - Adding sentiment analysis
@@ -13,7 +14,7 @@
  * - Party validation and identifiers
  */
 
-import { Vcon, Party, Dialog, PartyHistory } from '../src';
+import { Vcon, Party, Dialog, Session, Event } from '../src';
 
 console.log('=== Example 2: Phone Call Recording with Analysis ===\n');
 
@@ -71,11 +72,18 @@ console.log(`  Agent primary ID: ${agentParty.getPrimaryIdentifier()}\n`);
 const callStart = new Date('2025-01-15T14:30:00-06:00');
 const callDuration = 847; // 14 minutes 7 seconds
 
+// The Session lists the receivers. The customer called, so parties [0, 1] makes
+// the customer (the first party) the implied originator.
+const session = vcon.addSession(new Session({
+  start: callStart,
+  duration: callDuration,
+  parties: [0, 1]
+}));
+
 const recordingDialog = new Dialog({
   type: 'recording',
   start: callStart.toISOString(),
-  parties: [0, 1],
-  originator: 0,  // Customer initiated the call
+  parties: [0, 1],  // Contributors: one channel per party
   duration: callDuration,
   // Contact center specific fields
   campaign: 'claims-inbound',
@@ -89,21 +97,26 @@ recordingDialog.addExternalData(
   'audio/wav',
   {
     filename: 'call-abc123.wav',
-    content_hash: 'sha512-Tf9OoDQfCoI_FdP08BqxLq4OXaV5zLhR-NvZ3-hMWLLN7iZA50Dh7hctp5Om55Vg5ff5vQWKEqKAQz7W-kZRCg=='
+    content_hash: 'sha512-Tf9OoDQfCoI_FdP08BqxLq4OXaV5zLhR-NvZ3-hMWLLN7iZA50Dh7hctp5Om55Vg5ff5vQWKEqKAQz7W-kZRCg'
   }
 );
 
-// Add party history to track call events
-recordingDialog.party_history = [
-  new PartyHistory(0, 'join', callStart).toDict(),
-  new PartyHistory(1, 'join', new Date(callStart.getTime() + 15000)).toDict(),    // Agent joined after 15s
-  new PartyHistory(1, 'hold', new Date(callStart.getTime() + 300000)).toDict(),   // Put on hold at 5 min
-  new PartyHistory(1, 'unhold', new Date(callStart.getTime() + 420000)).toDict(), // Resumed at 7 min
-  new PartyHistory(0, 'drop', new Date(callStart.getTime() + callDuration * 1000)).toDict(),
-  new PartyHistory(1, 'drop', new Date(callStart.getTime() + callDuration * 1000 + 2000)).toDict()
-];
+vcon.addDialog(recordingDialog, session);
 
-vcon.addDialog(recordingDialog);
+// Track call events with Event Objects. In core-05 these replace the Dialog
+// party_history; each Event lists the Session(s) it applies to.
+const at = (ms: number) => new Date(callStart.getTime() + ms);
+const events = [
+  new Event({ type: 'join', time: at(0), sessions: session, party: 0 }),
+  new Event({ type: 'join', time: at(15000), sessions: session, party: 1 }),      // Agent joined after 15s
+  new Event({ type: 'hold', time: at(300000), sessions: session, party: 1 }),     // Put on hold at 5 min
+  new Event({ type: 'unhold', time: at(420000), sessions: session, party: 1 }),   // Resumed at 7 min
+  new Event({ type: 'drop', time: at(callDuration * 1000), sessions: session, party: 0 }),
+  new Event({ type: 'drop', time: at(callDuration * 1000 + 2000), sessions: session, party: 1 })
+];
+events.forEach(e => vcon.addEvent(e));
+
+
 
 console.log('Call recording details:');
 console.log(`  Type: ${recordingDialog.type}`);
@@ -113,7 +126,7 @@ const hashPreview = Array.isArray(recordingDialog.content_hash)
   ? recordingDialog.content_hash[0]
   : recordingDialog.content_hash;
 console.log(`  Content hash: ${hashPreview?.substring(0, 30)}...`);
-console.log(`  Party events: ${recordingDialog.party_history?.length}\n`);
+console.log(`  Party events: ${vcon.events.length}\n`);
 
 // Step 4: Add transcription analysis
 vcon.addAnalysis({
@@ -201,12 +214,21 @@ console.log(`Analysis items: ${vcon.analysis.length}`);
 console.log(`Extensions: ${vcon.extensions?.join(', ')}`);
 console.log(`Tags: ${JSON.stringify(vcon.tags)}`);
 
-// Step 9: Validate the dialog
+// Step 9: Validate the dialog and the whole vCon
 const validation = recordingDialog.validate();
 console.log(`\nDialog validation: ${validation.valid ? 'PASSED' : 'FAILED'}`);
 if (validation.errors.length > 0) {
   console.log('Errors:', validation.errors);
 }
+const whole = vcon.isValid();
+console.log(`vCon validation: ${whole.valid ? 'PASSED' : 'FAILED'}`);
+if (!whole.valid) {
+  console.log('Errors:', whole.errors);
+  process.exit(1);
+}
+// This example records no lawful basis; a real recorded call needs a
+// purpose "lawful_basis" attachment scoped to the Session.
+console.log(`Carries a lawful_basis attachment: ${vcon.hasLawfulBasis()}`);
 
 // Step 10: Output JSON (truncated for readability)
 const jsonOutput = JSON.parse(vcon.toJson());
@@ -217,6 +239,8 @@ console.log(JSON.stringify({
   subject: jsonOutput.subject,
   created_at: jsonOutput.created_at,
   parties: `[${jsonOutput.parties.length} parties]`,
+  sessions: `[${jsonOutput.sessions.length} session]`,
+  events: `[${jsonOutput.events.length} events]`,
   dialog: `[${jsonOutput.dialog.length} dialog - recording type]`,
   analysis: `[${jsonOutput.analysis.length} analysis items]`,
   extensions: jsonOutput.extensions,
