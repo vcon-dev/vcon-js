@@ -415,7 +415,21 @@ class Context {
 // ---------------------------------------------------------------------------
 
 /** T1: `vcon` "0.4.0" -> "0.5.0". */
+/**
+ * core-05 Date is RFC 3339: a Dialog start that is not one is never used as a
+ * Session start. Strict mode throws; otherwise the value is reported as unresolved.
+ */
+function checkDialogDates(ctx: Context): void {
+  ctx.dialogs.forEach((d, i) => {
+    if (!isPlainObject(d) || d.start === undefined || d.start === null || parseDateTime(d.start) !== undefined) return;
+    const msg = `dialog[${i}] start ${repr(d.start)} is not an RFC 3339 date-time`;
+    if (ctx.strict) throw new MigrationError(`T1: ${msg} (strict mode)`);
+    ctx.report.add('T1', UNRESOLVED, `${msg}; not used to derive a Session start.`, undefined, { dialog: i, start: d.start });
+  });
+}
+
 function stepT1Version(ctx: Context): void {
+  checkDialogDates(ctx);
   if (!('vcon' in ctx.out)) {
     ctx.report.add('T1', INFERRED, "Input had no 'vcon' parameter; set to '0.5.0' (AMB-12: writers emit it).", 'AMB-12');
   }
