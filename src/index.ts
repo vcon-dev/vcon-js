@@ -11,7 +11,12 @@ import {
   CORE_EVENT_TYPES,
   RuleCode
 } from './event';
-import { validateVconDict, extensionsInUse } from './validation';
+import { validateVconDict, extensionsInUse, contentHashProblems } from './validation';
+import {
+  validateLawfulBasisAttachment,
+  validateLawfulBasisBody,
+  LawfulBasisValidationResult
+} from './lawful-basis';
 import {
   migrate040To050,
   MigrationError,
@@ -72,6 +77,10 @@ export {
   validateSession,
   validateEvent,
   extensionsInUse,
+  contentHashProblems,
+  validateLawfulBasisAttachment,
+  validateLawfulBasisBody,
+  LawfulBasisValidationResult,
   EVENT_PARAMETER_RULES,
   CORE_EVENT_TYPES,
   SESSION_REFERENCE_TYPES,

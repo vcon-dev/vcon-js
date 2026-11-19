@@ -187,7 +187,7 @@ describe('Dialog rules', () => {
 describe('extensions enforcement', () => {
   it('requires lawful_basis and wtf_transcription to be listed', () => {
     const v = withSession();
-    v.addAttachment({ purpose: 'lawful_basis', party: 0, session: 0, body: { lawful_basis: 'consent' } as any, encoding: 'json' });
+    v.addAttachment({ purpose: 'lawful_basis', party: 0, session: 0, body: { lawful_basis: 'consent', expiration: null, purpose_grants: [{ purpose: 'recording', granted: true, granted_at: T }] } as any, encoding: 'json' });
     expect(v.isValid().errors).toContain("Extension 'lawful_basis' is in use but is not listed in the extensions parameter.");
     v.addExtension('lawful_basis');
     expect(v.isValid().valid).toBe(true);
@@ -231,13 +231,14 @@ describe('lawful basis', () => {
     expect(v.getValidationWarnings().some(w => /lawful_basis/.test(w))).toBe(false);
   });
 
-  it('warns when a lawful_basis attachment has no session or no party', () => {
+  it('leaves lawful_basis scope to the core rules (no extra no-party/no-session warnings)', () => {
     const v = withSession();
     v.data.extensions = ['lawful_basis'];
     v.data.attachments = [{ purpose: 'lawful_basis', start: T, dialog: 0, body: {}, encoding: 'json', mediatype: 'application/json' }];
     const warnings = v.getValidationWarnings();
-    expect(warnings.some(w => /no party/.test(w))).toBe(true);
-    expect(warnings.some(w => /no session/.test(w))).toBe(true);
+    expect(warnings.some(w => /no party/.test(w))).toBe(false);
+    expect(warnings.some(w => /no session/.test(w))).toBe(false);
+    expect(v.isValid().errors).toContain('Attachment at index 0 is missing required field: party');
   });
 });
 

@@ -278,7 +278,11 @@ vcon.addAttachment({
   party: 0,
   session: 0,
   encoding: 'json',
-  body: { lawful_basis: 'consent', /* ...per the lawful basis extension draft */ }
+  body: {
+    lawful_basis: 'consent',
+    expiration: null,
+    purpose_grants: [{ purpose: 'recording', granted: true, granted_at: '2026-01-15T10:30:00Z' }]
+  }
 });
 vcon.addExtension('lawful_basis');
 
@@ -286,7 +290,11 @@ vcon.hasLawfulBasis();                // true
 vcon.findLawfulBasisAttachments(0);   // lawful_basis attachments for party 0
 ```
 
-`getValidationWarnings()` flags a `lawful_basis` attachment that has no `party` or no `session`.
+`isValid()` checks the body of every `lawful_basis` attachment (required fields, purpose grants, the `content_hash` object, proof mechanisms and registry), reporting each finding as `Attachment at index N (lawful_basis): ...`. An expired basis and unknown proof types, hash algorithms or canonicalization methods are warnings in `getValidationWarnings()`. `validateLawfulBasisAttachment()` checks a bare attachment.
+
+### Content hashes and bodies
+
+`isValid()` rejects a malformed `content_hash` (it must be `<algorithm>-<unpadded base64url digest>`, or a non-empty list of them; `sha512` and `sha256` digests must have the right length) on Dialogs, attachments, analysis, `redacted_from` and `amended_from`. `getValidationWarnings()` notes a Dialog, analysis or inline attachment with a `url` but no `content_hash` (this will be an error in a later release), and a body under `encoding: "json"` that is a serialized JSON string rather than the JSON value. `contentHashProblems(value)` gives the reasons for one value.
 
 ### Working with Tags
 
