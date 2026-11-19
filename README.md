@@ -248,6 +248,8 @@ vcon.sign(privateKey, 'none');       // throws AlgorithmNotPermittedError
 
 Encryption (JWE) is not implemented; wrap the vCon with a library of your choice.
 
+A signed (JWS) or encrypted (JWE) container loaded with `new Vcon(...)` is kept exactly as given. `isValid()` checks a JWS's `signatures` and validates the decoded `payload` as a vCon; for a JWE it checks the member types and `getValidationWarnings()` notes that the content cannot be validated without decrypting it.
+
 ### Working with Extensions
 
 ```typescript

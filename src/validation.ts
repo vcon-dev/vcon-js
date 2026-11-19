@@ -6,7 +6,7 @@
  */
 import { CORE_EVENT_TYPES, validateEvent } from './event';
 import { SESSION_REFERENCE_TYPES, validateSession } from './session';
-import { asList, dateTimeProblem, isIndex, isPlainObject, parseDateTime, pyRepr } from './util';
+import { asList, dateTimeProblem, decodeJsonPayload, isIndex, isPlainObject, parseDateTime, pyRepr } from './util';
 
 export const SYNTAX_VERSION = '0.5.0';
 
@@ -238,11 +238,77 @@ function scanRedactedRefs(obj: unknown, found: Set<number>): void {
   }
 }
 
-/** Validate an unsigned vCon object. Returns `{ errors, warnings }`. */
+/** True for a JWS General JSON Serialization container (section 6.2). */
+export function signedForm(vcon: unknown): boolean {
+  return isPlainObject(vcon) && !('uuid' in vcon) && 'payload' in vcon && 'signatures' in vcon;
+}
+
+/** True for a JWE General JSON Serialization container (section 6.3). */
+export function encryptedForm(vcon: unknown): boolean {
+  return isPlainObject(vcon) && !('uuid' in vcon) && 'ciphertext' in vcon;
+}
+
+/** The decoded JWS payload of a signed vCon, or undefined if it is not base64url JSON. */
+export function signedPayload(vcon: Record<string, any>): unknown {
+  return decodeJsonPayload(vcon.payload);
+}
+
+function validateJws(
+  vcon: Record<string, any>,
+  dialogMimeTypes: string[]
+): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const sigs = vcon.signatures;
+  if (!Array.isArray(sigs) || sigs.length === 0) {
+    errors.push("Signed vCon: 'signatures' must be a non-empty array.");
+  } else {
+    sigs.forEach((sig, n) => {
+      if (!isPlainObject(sig)) {
+        errors.push(`Signed vCon: signatures[${n}] must be an object.`);
+        return;
+      }
+      if (typeof sig.signature !== 'string') errors.push(`Signed vCon: signatures[${n}] is missing 'signature'.`);
+      if (typeof sig.protected !== 'string' && !isPlainObject(sig.header)) {
+        errors.push(`Signed vCon: signatures[${n}] needs 'protected' or 'header'.`);
+      }
+    });
+  }
+  const payload = signedPayload(vcon);
+  if (!isPlainObject(payload)) {
+    errors.push("Signed vCon: 'payload' is not a base64url-encoded JSON object.");
+    return { errors, warnings: [] };
+  }
+  const inner = validateVconDict(payload, dialogMimeTypes);
+  return { errors: [...errors, ...inner.errors], warnings: inner.warnings };
+}
+
+function validateJwe(vcon: Record<string, any>): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  for (const member of ['ciphertext', 'iv', 'tag']) {
+    if (member in vcon && typeof vcon[member] !== 'string') {
+      errors.push(`Encrypted vCon: '${member}' must be a base64url string.`);
+    }
+  }
+  if ('recipients' in vcon && (!Array.isArray(vcon.recipients) || vcon.recipients.length === 0)) {
+    errors.push("Encrypted vCon: 'recipients' must be a non-empty array.");
+  }
+  if ('protected' in vcon && typeof vcon.protected !== 'string') {
+    errors.push("Encrypted vCon: 'protected' must be a base64url string.");
+  }
+  return { errors, warnings: ['Encrypted vCon: the content cannot be validated without decrypting it.'] };
+}
+
+/**
+ * Validate a vCon object. Returns `{ errors, warnings }`. A signed (JWS) vCon
+ * is checked as a JWS and its payload as a vCon; an encrypted (JWE) vCon is
+ * checked as a JWE only.
+ */
 export function validateVconDict(
   vcon: Record<string, any>,
   dialogMimeTypes: string[] = DIALOG_MIME_TYPES
 ): { errors: string[]; warnings: string[] } {
+  if (signedForm(vcon)) return validateJws(vcon, dialogMimeTypes);
+  if (encryptedForm(vcon)) return validateJwe(vcon);
   const errors: string[] = [];
   const warnings: string[] = [];
 

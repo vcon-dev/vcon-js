@@ -21,9 +21,9 @@ import { Dialog as DialogClass } from './dialog';
 import { Session as SessionClass } from './session';
 import { Event as EventClass } from './event';
 import { migrate040To050, MigrationReport } from './migration';
-import { validateVconDict } from './validation';
+import { encryptedForm, signedForm, signedPayload, validateVconDict } from './validation';
 import { validateLawfulBasisAttachment } from './lawful-basis';
-import { base64UrlDecodeToString, clone, isPlainObject, warn } from './util';
+import { base64UrlDecodeToString, clone, decodeJsonPayload, isPlainObject, warn } from './util';
 
 /** A JWS used `alg` "none" (forbidden by core-05) or an unsupported algorithm. */
 export class AlgorithmNotPermittedError extends Error {
@@ -66,7 +66,7 @@ function isLegacy040(dict: any): boolean {
   if (dict.vcon === LEGACY_VCON_VERSION) return true;
   if (!('vcon' in dict) && typeof dict.payload === 'string' && 'signatures' in dict) {
     try {
-      const payload = JSON.parse(base64UrlDecodeToString(dict.payload));
+      const payload = decodeJsonPayload(dict.payload);
       return isPlainObject(payload) && payload.vcon === LEGACY_VCON_VERSION;
     } catch {
       return false;
@@ -148,6 +148,14 @@ export class Vcon {
     if (legacy && !this.migrationReport) {
       // An unmigrated 0.4.0 (or signed 0.4.0) object is kept as is: no defaults
       // are added, so legacy parameters and the signature survive.
+      this.data = clone(input) as VconData;
+      return;
+    }
+
+    if (signedForm(input) || encryptedForm(input)) {
+      // A JWS or JWE container (core-05 sections 6.2, 6.3) is kept exactly as
+      // given: adding uuid, created_at or empty arrays would change (and for
+      // JWS, invalidate) the document. isValid() checks it.
       this.data = clone(input) as VconData;
       return;
     }
@@ -601,10 +609,14 @@ export class Vcon {
   private validateAll(): { errors: string[]; warnings: string[] } {
     const data = clone(this.data) as Record<string, any>;
     const { errors, warnings } = validateVconDict(data);
-    const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+    // For a signed vCon the attachments are in the payload; an encrypted one cannot be read.
+    let content: unknown = signedForm(data) ? signedPayload(data) : data;
+    if (encryptedForm(data) || !isPlainObject(content)) content = {};
+    const body = content as Record<string, any>;
+    const attachments = Array.isArray(body.attachments) ? body.attachments : [];
     attachments.forEach((attachment: unknown, i: number) => {
       if (!isPlainObject(attachment) || attachment.purpose !== 'lawful_basis') return;
-      if (isPlainObject(data.redacted_from) && !('body' in attachment)) return;
+      if (isPlainObject(body.redacted_from) && !('body' in attachment)) return;
       // Scope (party, dialog/session) is checked by the core rules above.
       const result = validateLawfulBasisAttachment(attachment);
       errors.push(...result.errors.map(e => `Attachment at index ${i} (lawful_basis): ${e}`));
