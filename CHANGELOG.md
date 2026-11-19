@@ -33,7 +33,7 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
 - `Vcon.migrate040To050()` static method, `Vcon.migrationReport`, and the `migrateLegacy` and
   `strictMigration` options on `new Vcon()` and `Vcon.buildFromJson()`.
 - `Vcon.isValid()` and `Vcon.getValidationWarnings()`, backed by `validateVconDict()`.
-- Validation parity with the reference library vcon 1.0.4, with the same messages:
+- Validation parity with the reference library vcon 1.0.5, with the same messages:
   - A malformed `content_hash` (not `<algorithm>-<base64url digest>`, an empty list, or a
     `sha512`/`sha256` digest of the wrong length) on a Dialog, attachment, analysis,
     `redacted_from` or `amended_from` is an error. `contentHashProblems()` is exported.
@@ -46,6 +46,12 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
     types, hash algorithms and canonicalization methods are warnings. Exported as
     `validateLawfulBasisAttachment()` and `validateLawfulBasisBody()`.
   - An unparseable `created_at` or `updated_at` error quotes the reason, as the reference does.
+  - A JWS container (no `uuid`, has `payload` and `signatures`) or JWE container (no `uuid`,
+    has `ciphertext`) is kept exactly as given on load: no `uuid`, `created_at` or arrays are
+    added. `isValid()` checks a JWS's `signatures` and validates its decoded `payload` as a vCon
+    (including the lawful basis check); a JWE gets type checks on `ciphertext`, `iv`, `tag`,
+    `protected` and `recipients`, and the warning that its content cannot be validated without
+    decrypting it. `signedForm()`, `encryptedForm()` and `signedPayload()` are exported.
 - `Vcon.sign(key, alg = "RS256")`, `Vcon.verify(key)` and `Vcon.generateKeyPair()` (JWS with
   Node `crypto`, no new dependency); `AlgorithmNotPermittedError`. This restores a signing
   surface that 0.5.2 removed, because core-05 section 6.2.2 now forbids `alg` "none" and the

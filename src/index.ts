@@ -11,7 +11,7 @@ import {
   CORE_EVENT_TYPES,
   RuleCode
 } from './event';
-import { validateVconDict, extensionsInUse, contentHashProblems } from './validation';
+import { validateVconDict, extensionsInUse, contentHashProblems, signedForm, encryptedForm, signedPayload } from './validation';
 import {
   validateLawfulBasisAttachment,
   validateLawfulBasisBody,
@@ -78,6 +78,9 @@ export {
   validateEvent,
   extensionsInUse,
   contentHashProblems,
+  signedForm,
+  encryptedForm,
+  signedPayload,
   validateLawfulBasisAttachment,
   validateLawfulBasisBody,
   LawfulBasisValidationResult,
