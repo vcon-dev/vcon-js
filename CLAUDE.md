@@ -18,6 +18,7 @@ src/
 ├── event.ts        # Event class, the per-type parameter table, validateEvent
 ├── attachment.ts   # Attachment class for related files
 ├── validation.ts   # validateVconDict: the core-05 structural checks behind Vcon.isValid()
+├── lawful-basis.ts # Lawful basis attachment body validator (port of the reference's)
 ├── migration.ts    # migrate040To050 and MigrationReport (Appendix A.1)
 ├── util.ts         # Shared helpers (date parsing, base64url, warnings)
 ├── index.ts        # Public API exports

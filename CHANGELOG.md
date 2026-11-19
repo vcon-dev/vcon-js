@@ -33,6 +33,19 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
 - `Vcon.migrate040To050()` static method, `Vcon.migrationReport`, and the `migrateLegacy` and
   `strictMigration` options on `new Vcon()` and `Vcon.buildFromJson()`.
 - `Vcon.isValid()` and `Vcon.getValidationWarnings()`, backed by `validateVconDict()`.
+- Validation parity with the reference library vcon 1.0.4, with the same messages:
+  - A malformed `content_hash` (not `<algorithm>-<base64url digest>`, an empty list, or a
+    `sha512`/`sha256` digest of the wrong length) on a Dialog, attachment, analysis,
+    `redacted_from` or `amended_from` is an error. `contentHashProblems()` is exported.
+  - Warnings for a Dialog, analysis or inline attachment with a `url` but no `content_hash`
+    (an error from the next minor release), and for a serialized JSON string body under
+    `encoding: "json"`.
+  - `isValid()` runs the lawful basis body validator on every `purpose: "lawful_basis"`
+    attachment (`src/lawful-basis.ts`, a port of the reference `LawfulBasisValidator`), with
+    errors and warnings prefixed `Attachment at index N (lawful_basis): `. Unknown proof
+    types, hash algorithms and canonicalization methods are warnings. Exported as
+    `validateLawfulBasisAttachment()` and `validateLawfulBasisBody()`.
+  - An unparseable `created_at` or `updated_at` error quotes the reason, as the reference does.
 - `Vcon.sign(key, alg = "RS256")`, `Vcon.verify(key)` and `Vcon.generateKeyPair()` (JWS with
   Node `crypto`, no new dependency); `AlgorithmNotPermittedError`. This restores a signing
   surface that 0.5.2 removed, because core-05 section 6.2.2 now forbids `alg` "none" and the
@@ -88,6 +101,9 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
 - `Dialog.validate()` rejects unknown Dialog types, content on an `incomplete` Dialog and media
   types outside the known set (text, message and multipart subtypes are accepted).
 - The vendored test schema is now the core-05 Appendix C schema (was the `0.4.0` schema).
+- `created_at` is kept exactly as written on load; only a missing or empty value is set to
+  now. `getValidationWarnings()` no longer adds its own no-party/no-session notes for
+  `lawful_basis` attachments (`isValid()` already requires `party` and `dialog` or `session`).
 - Date-time parsing rejects out-of-range fields (February 30, hour 24, offset of 24 hours)
   instead of rolling them over, and keeps microseconds. `migrate040To050` derives Session start
   and duration, and a consultation-end Event time, with microsecond precision and the reference's

@@ -39,7 +39,7 @@ function v04(extra: D = {}): D {
 
 const rec = (extra: D = {}): D => ({
   type: 'recording', start: T0, duration: 10, parties: [0, 1],
-  mediatype: 'audio/x-wav', url: 'https://e.com/a.wav', content_hash: 'sha512-x', ...extra
+  mediatype: 'audio/x-wav', url: 'https://e.com/a.wav', content_hash: 'sha512-vBUU3xDKpjrwFoYiMR63DejHKvgyz4N7xT7Ukx6wHQNuzU4_LY32LMljsTeCGJ_zxqjeS4PcdM0Mlg0mksM06A', ...extra
 });
 const text = (extra: D = {}): D => ({
   type: 'text', start: T1, parties: [0, 1], body: 'hi', encoding: 'none', mediatype: 'text/plain', ...extra
@@ -740,7 +740,7 @@ describe('index stability', () => {
 
 describe('T11 and T12 renames', () => {
   it('renames redacted', () => {
-    const r = { uuid: '01a16b86-96e7-80a8-b9a2-279e0d16bc46', type: 'PII Redaction', url: 'https://e.com/u', content_hash: 'sha512-x' };
+    const r = { uuid: '01a16b86-96e7-80a8-b9a2-279e0d16bc46', type: 'PII Redaction', url: 'https://e.com/u', content_hash: 'sha512-vBUU3xDKpjrwFoYiMR63DejHKvgyz4N7xT7Ukx6wHQNuzU4_LY32LMljsTeCGJ_zxqjeS4PcdM0Mlg0mksM06A' };
     const { out } = migrate(v04({ redacted: r }));
     expect(out.redacted_from).toEqual(r);
     expect('redacted' in out).toBe(false);

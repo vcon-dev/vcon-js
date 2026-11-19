@@ -22,6 +22,7 @@ import { Session as SessionClass } from './session';
 import { Event as EventClass } from './event';
 import { migrate040To050, MigrationReport } from './migration';
 import { validateVconDict } from './validation';
+import { validateLawfulBasisAttachment } from './lawful-basis';
 import { base64UrlDecodeToString, clone, isPlainObject, warn } from './util';
 
 /** A JWS used `alg` "none" (forbidden by core-05) or an unsupported algorithm. */
@@ -165,7 +166,9 @@ export class Vcon {
       analysis: input.analysis || [],
       ...input
     } as VconData;
-    this.data.created_at = created || this.data.created_at;
+    // A string is kept exactly as written (rewriting it would change the
+    // document and break a signature over it); a missing or empty value gets now.
+    this.data.created_at = created || new Date().toISOString();
     if (this.data.vcon === undefined) delete this.data.vcon;
   }
 
@@ -578,28 +581,40 @@ export class Vcon {
    * exists when there are Dialogs or Events, that attachments have `party` and
    * `dialog` or `session`, that `redacted_from` and `amended_from` are
    * exclusive, that `extensions` lists every extension in use (and every
-   * `critical` entry), and that every `__REDACTED_REF_#` has a
-   * `redacted_strings` entry.
+   * `critical` entry), that every `__REDACTED_REF_#` has a `redacted_strings`
+   * entry, that every `url` has a `content_hash` and every `content_hash` is
+   * well formed, and the body of every `lawful_basis` attachment.
    *
    * SHOULD-level findings are not errors; see getValidationWarnings().
    */
   isValid(): { valid: boolean; errors: string[] } {
-    const { errors } = validateVconDict(clone(this.data) as Record<string, any>);
+    const { errors } = this.validateAll();
     return { valid: errors.length === 0, errors };
   }
 
   /** SHOULD-level findings (for example SHOULD NOT parameters on Events). */
   getValidationWarnings(): string[] {
+    return this.validateAll().warnings;
+  }
+
+  /** Core rules plus the body of every lawful_basis attachment. */
+  private validateAll(): { errors: string[]; warnings: string[] } {
     const data = clone(this.data) as Record<string, any>;
-    const { warnings } = validateVconDict(data);
-    // A lawful_basis attachment is scoped with party plus session (extension draft).
-    (data.attachments ?? []).forEach((a: any, i: number) => {
-      if (isPlainObject(a) && a.purpose === 'lawful_basis') {
-        if (!('party' in a)) warnings.push(`lawful_basis attachment at index ${i} has no party.`);
-        if (!('session' in a)) warnings.push(`lawful_basis attachment at index ${i} has no session; core-05 scopes a lawful basis to Sessions.`);
-      }
+    const { errors, warnings } = validateVconDict(data);
+    const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+    attachments.forEach((attachment: unknown, i: number) => {
+      if (!isPlainObject(attachment) || attachment.purpose !== 'lawful_basis') return;
+      if (isPlainObject(data.redacted_from) && !('body' in attachment)) return;
+      // Scope (party, dialog/session) is checked by the core rules above.
+      const result = validateLawfulBasisAttachment(attachment);
+      errors.push(...result.errors.map(e => `Attachment at index ${i} (lawful_basis): ${e}`));
+      warnings.push(
+        ...result.warnings
+          .filter(w => !w.includes('no party') && !w.includes('no session'))
+          .map(w => `Attachment at index ${i} (lawful_basis): ${w}`)
+      );
     });
-    return warnings;
+    return { errors, warnings };
   }
 
   // Signing (JWS, general serialization with one signature)

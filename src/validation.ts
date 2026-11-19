@@ -6,7 +6,7 @@
  */
 import { CORE_EVENT_TYPES, validateEvent } from './event';
 import { SESSION_REFERENCE_TYPES, validateSession } from './session';
-import { asList, isIndex, isPlainObject, parseDateTime } from './util';
+import { asList, dateTimeProblem, isIndex, isPlainObject, parseDateTime, pyRepr } from './util';
 
 export const SYNTAX_VERSION = '0.5.0';
 
@@ -76,6 +76,79 @@ export const DIALOG_MIME_TYPES = [
 ];
 
 const REDACTED_REF_RE = /__REDACTED_REF_(\d{1,5})(?!\d)/g;
+
+/** ContentHash token (section 2.2): "<algorithm>-<unpadded base64url digest>". */
+const CONTENT_HASH_RE = /^([a-z0-9]+)-([A-Za-z0-9_-]+)$/;
+/** Unpadded base64url length of the digests this library knows. */
+const DIGEST_B64_LENGTHS: Record<string, number> = { sha512: 86, sha256: 43 };
+
+/** Return why `value` is not a ContentHash or ContentHash[] (empty if it is). */
+export function contentHashProblems(value: unknown): string[] {
+  if (Array.isArray(value) && value.length === 0) return ['must not be an empty array'];
+  const tokens = Array.isArray(value) ? value : [value];
+  const problems: string[] = [];
+  for (const token of tokens) {
+    if (typeof token !== 'string') {
+      problems.push(`${pyRepr(token)} is not a string`);
+      continue;
+    }
+    const m = CONTENT_HASH_RE.exec(token);
+    if (!m) {
+      problems.push(`${pyRepr(token)} is not of the form '<algorithm>-<base64url digest>'`);
+      continue;
+    }
+    const expected = Object.prototype.hasOwnProperty.call(DIGEST_B64_LENGTHS, m[1]) ? DIGEST_B64_LENGTHS[m[1]] : undefined;
+    if (expected !== undefined && m[2].length !== expected) {
+      problems.push(
+        `${pyRepr(token)} has a ${m[1]} digest of ${m[2].length} base64url characters, expected ${expected}`
+      );
+    }
+  }
+  return problems;
+}
+
+function isSerializedJson(body: string): boolean {
+  const s = body.trim();
+  if (s[0] !== '{' && s[0] !== '[') return false;
+  try {
+    JSON.parse(s);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Integrity and body-form checks shared by Dialog, Attachment, Analysis and the
+ * redacted_from / amended_from references (section 2.4).
+ */
+function checkContent(
+  obj: Record<string, any>,
+  label: string,
+  errors: string[],
+  warnings: string[],
+  checkUrl = true
+): void {
+  if (checkUrl && 'url' in obj && !('content_hash' in obj)) {
+    // A MUST in section 2.4. A warning in 1.0.x, as in the reference library,
+    // so producers that only hold a carrier URL keep validating.
+    warnings.push(
+      `${label} has a url but no content_hash (an external reference MUST have both; ` +
+        'this will be an error in vcon 1.1).'
+    );
+  }
+  if ('content_hash' in obj) {
+    for (const problem of contentHashProblems(obj.content_hash)) {
+      errors.push(`${label} has an invalid content_hash: ${problem}.`);
+    }
+  }
+  if (obj.encoding === 'json' && typeof obj.body === 'string' && isSerializedJson(obj.body)) {
+    warnings.push(
+      `${label} has encoding 'json' and a body that is a serialized JSON string; ` +
+        'the body should be the JSON value itself (section 2.3.2).'
+    );
+  }
+}
 
 /**
  * True if `mediatype` is acceptable for a Dialog. Media type parameters
@@ -179,7 +252,7 @@ export function validateVconDict(
   }
   for (const ts of ['created_at', 'updated_at']) {
     if (ts in vcon && parseDateTime(vcon[ts]) === undefined) {
-      errors.push(`Invalid ${ts} format. Must be an ISO 8601 datetime string.`);
+      errors.push(`Invalid ${ts} format. Must be an ISO 8601 datetime string: ${dateTimeProblem(vcon[ts])}`);
     }
   }
   if ('vcon' in vcon && vcon.vcon !== SYNTAX_VERSION) {
@@ -246,6 +319,7 @@ export function validateVconDict(
     } else {
       if (!('type' in rf)) errors.push('redacted_from is missing required field: type');
       if ('url' in rf && !('content_hash' in rf)) errors.push('redacted_from with url must include content_hash.');
+      checkContent(rf, 'redacted_from', errors, warnings, false);
     }
   }
   if ('amended_from' in vcon) {
@@ -257,6 +331,7 @@ export function validateVconDict(
         errors.push('amended_from must include uuid, or an external reference (url).');
       }
       if ('url' in af && !('content_hash' in af)) errors.push('amended_from with url must include content_hash.');
+      checkContent(af, 'amended_from', errors, warnings, false);
     }
   }
 
@@ -379,6 +454,12 @@ export function validateVconDict(
     }
   });
 
+  dialogs.forEach((dialog, i) => {
+    if (isPlainObject(dialog) && dialog.type !== 'incomplete') {
+      checkContent(dialog, `Dialog at index ${i}`, errors, warnings);
+    }
+  });
+
   // --- sessions -----------------------------------------------------------------
   if ((dialogCount || events.length) && sessions.length === 0) {
     errors.push('At least one Session Object MUST exist if the events array or the dialog array contains Objects.');
@@ -442,6 +523,7 @@ export function validateVconDict(
     if (!(hasInline || hasExternal || redacted)) {
       errors.push(`Attachment at index ${i} must include body+encoding or url+content_hash.`);
     }
+    checkContent(attachment, `Attachment at index ${i}`, errors, warnings, hasInline || redacted);
     if ('encoding' in attachment && !CORE_ENCODINGS.includes(attachment.encoding) && extListed.length === 0) {
       errors.push(`Attachment at index ${i} has invalid encoding: ${attachment.encoding}`);
     }
@@ -494,6 +576,7 @@ export function validateVconDict(
     if ('encoding' in analysis && !CORE_ENCODINGS.includes(analysis.encoding) && extListed.length === 0) {
       errors.push(`Analysis at index ${i} has invalid encoding: ${analysis.encoding}`);
     }
+    checkContent(analysis, `Analysis at index ${i}`, errors, warnings);
     const refs: Array<[string, number, string]> = [
       ['dialog', dialogCount, 'dialog'],
       ['sessions', sessionCount, 'session'],
