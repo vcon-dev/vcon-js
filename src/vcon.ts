@@ -590,8 +590,8 @@ export class Vcon {
    * `dialog` or `session`, that `redacted_from` and `amended_from` are
    * exclusive, that `extensions` lists every extension in use (and every
    * `critical` entry), that every `__REDACTED_REF_#` has a `redacted_strings`
-   * entry, that every `url` has a `content_hash` and every `content_hash` is
-   * well formed, and the body of every `lawful_basis` attachment.
+   * entry, that every `content_hash` is well formed (a `url` without one is
+   * allowed, except on `redacted_from` and `amended_from`), and the body of every `lawful_basis` attachment.
    *
    * SHOULD-level findings are not errors; see getValidationWarnings().
    */

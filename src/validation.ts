@@ -121,22 +121,19 @@ function isSerializedJson(body: string): boolean {
 /**
  * Integrity and body-form checks shared by Dialog, Attachment, Analysis and the
  * redacted_from / amended_from references (section 2.4).
+ *
+ * A `url` without a `content_hash` is allowed on Dialog, Attachment and
+ * Analysis: a producer cannot always obtain stable bytes for the URL (a
+ * streaming-service page, audio behind a login). This follows the working
+ * group's direction on draft-ietf-vcon-vcon-core issue #40; core-05 still
+ * says MUST. `redacted_from` and `amended_from` keep the requirement.
  */
 function checkContent(
   obj: Record<string, any>,
   label: string,
   errors: string[],
-  warnings: string[],
-  checkUrl = true
+  warnings: string[]
 ): void {
-  if (checkUrl && 'url' in obj && !('content_hash' in obj)) {
-    // A MUST in section 2.4. A warning in 1.0.x, as in the reference library,
-    // so producers that only hold a carrier URL keep validating.
-    warnings.push(
-      `${label} has a url but no content_hash (an external reference MUST have both; ` +
-        'this will be an error in vcon 1.1).'
-    );
-  }
   if ('content_hash' in obj) {
     for (const problem of contentHashProblems(obj.content_hash)) {
       errors.push(`${label} has an invalid content_hash: ${problem}.`);
@@ -385,7 +382,7 @@ export function validateVconDict(
     } else {
       if (!('type' in rf)) errors.push('redacted_from is missing required field: type');
       if ('url' in rf && !('content_hash' in rf)) errors.push('redacted_from with url must include content_hash.');
-      checkContent(rf, 'redacted_from', errors, warnings, false);
+      checkContent(rf, 'redacted_from', errors, warnings);
     }
   }
   if ('amended_from' in vcon) {
@@ -397,7 +394,7 @@ export function validateVconDict(
         errors.push('amended_from must include uuid, or an external reference (url).');
       }
       if ('url' in af && !('content_hash' in af)) errors.push('amended_from with url must include content_hash.');
-      checkContent(af, 'amended_from', errors, warnings, false);
+      checkContent(af, 'amended_from', errors, warnings);
     }
   }
 
@@ -585,11 +582,11 @@ export function validateVconDict(
     }
     if (!('purpose' in attachment)) errors.push(`Attachment at index ${i} is missing required field: purpose`);
     const hasInline = 'body' in attachment && 'encoding' in attachment;
-    const hasExternal = 'url' in attachment && 'content_hash' in attachment;
+    const hasExternal = 'url' in attachment;
     if (!(hasInline || hasExternal || redacted)) {
-      errors.push(`Attachment at index ${i} must include body+encoding or url+content_hash.`);
+      errors.push(`Attachment at index ${i} must include body+encoding or url.`);
     }
-    checkContent(attachment, `Attachment at index ${i}`, errors, warnings, hasInline || redacted);
+    checkContent(attachment, `Attachment at index ${i}`, errors, warnings);
     if ('encoding' in attachment && !CORE_ENCODINGS.includes(attachment.encoding) && extListed.length === 0) {
       errors.push(`Attachment at index ${i} has invalid encoding: ${attachment.encoding}`);
     }

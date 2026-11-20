@@ -20,9 +20,9 @@ describe('Dialog.validate error branches', () => {
     expect(r.errors.some(e => /Disposition is required/.test(e))).toBe(true);
   });
 
-  it('rejects external url without content_hash', () => {
+  it('allows an external url without content_hash', () => {
     const r = new Dialog({ type: 'recording', start, parties: [0], url: 'https://x/a.wav' }).validate();
-    expect(r.errors.some(e => /MUST include content_hash/.test(e))).toBe(true);
+    expect(r).toEqual({ valid: true, errors: [] });
   });
 
   it('rejects a malformed content_hash', () => {
@@ -55,9 +55,16 @@ describe('Attachment.validate error branches', () => {
     expect(r.errors.some(e => /must have a purpose/.test(e))).toBe(true);
   });
 
-  it('rejects external url without content_hash', () => {
+  it('allows an external url without content_hash', () => {
     const r = new Attachment({ purpose: 'transcript', party: 0, dialog: 0, url: 'https://x/t.txt' }).validate();
-    expect(r.errors.some(e => /MUST include content_hash/.test(e))).toBe(true);
+    expect(r.errors.some(e => /content_hash/.test(e))).toBe(false);
+  });
+
+  it('rejects a malformed content_hash next to a url', () => {
+    const r = new Attachment({
+      purpose: 'transcript', party: 0, dialog: 0, url: 'https://x/t.txt', content_hash: 'md5-abc'
+    }).validate();
+    expect(r.errors.some(e => /Invalid content_hash format/.test(e))).toBe(true);
   });
 
   it('throws on an invalid encoding at construction', () => {

@@ -33,13 +33,18 @@ Objects. Readers accept `0.4.0` and `0.5.0`; writers emit `0.5.0`.
 - `Vcon.migrate040To050()` static method, `Vcon.migrationReport`, and the `migrateLegacy` and
   `strictMigration` options on `new Vcon()` and `Vcon.buildFromJson()`.
 - `Vcon.isValid()` and `Vcon.getValidationWarnings()`, backed by `validateVconDict()`.
-- Validation parity with the reference library vcon 1.0.5, with the same messages:
+- Validation parity with the reference library vcon 1.0.6, with the same messages:
   - A malformed `content_hash` (not `<algorithm>-<base64url digest>`, an empty list, or a
     `sha512`/`sha256` digest of the wrong length) on a Dialog, attachment, analysis,
     `redacted_from` or `amended_from` is an error. `contentHashProblems()` is exported.
-  - Warnings for a Dialog, analysis or inline attachment with a `url` but no `content_hash`
-    (an error from the next minor release), and for a serialized JSON string body under
-    `encoding: "json"`.
+  - A `url` without a `content_hash` is allowed on a Dialog, attachment or analysis, with no
+    error and no warning, following the working group's direction on
+    draft-ietf-vcon-vcon-core issue #40 (a producer cannot always obtain stable bytes for the
+    URL; core-05 itself still says MUST). An attachment needs `body`+`encoding` or `url`
+    (`Attachment at index N must include body+encoding or url.`). `Dialog.validate()` and
+    `Attachment.validate()` no longer require a `content_hash` with a `url`, but still reject a
+    malformed one. `redacted_from` and `amended_from` with a `url` still need a `content_hash`.
+  - A warning for a serialized JSON string body under `encoding: "json"`.
   - `isValid()` runs the lawful basis body validator on every `purpose: "lawful_basis"`
     attachment (`src/lawful-basis.ts`, a port of the reference `LawfulBasisValidator`), with
     errors and warnings prefixed `Attachment at index N (lawful_basis): `. Unknown proof

@@ -69,7 +69,7 @@ The library implements draft-ietf-vcon-vcon-core-05 (syntax `"0.5.0"`; 0.4.0 is 
 - **JWS `alg` "none" is rejected** by `sign()` and `verify()`.
 - **0.4.0 input is migrated on load** (`migrate040To050`); signed 0.4.0 input is not.
 - **`group` has been removed** from the public surface (spec reserves it).
-- **`content_hash` format** is checked by `Dialog.validate()` and `Attachment.validate()`.
+- **`content_hash` format** is checked by `Dialog.validate()`, `Attachment.validate()` and `isValid()`. A `url` without a `content_hash` is allowed on Dialog, Attachment and Analysis (vcon 1.0.6, WG direction on core issue #40); `redacted_from`/`amended_from` with a `url` still need one.
 
 ## Development Commands
 

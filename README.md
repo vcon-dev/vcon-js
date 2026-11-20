@@ -83,8 +83,8 @@ vcon.addAttachment({
 vcon.addAttachment({ purpose: 'note', body: 'hi', encoding: 'none', mediatype: 'text/plain', party: 1, dialog: 0 });
 vcon.addAttachment({ purpose: 'note', body: 'hi', encoding: 'none', mediatype: 'text/plain', party: 1, session: [0, 1] });
 
-// External attachment (url + content_hash both required; content_hash must
-// match sha512-<base64url-of-SHA-512>)
+// External attachment (a content_hash is recommended where the bytes are stable;
+// when present it must match sha512-<base64url-of-SHA-512>)
 vcon.addAttachment({
   purpose: 'transcript',
   url: 'https://example.com/transcript.txt',
@@ -296,7 +296,7 @@ vcon.findLawfulBasisAttachments(0);   // lawful_basis attachments for party 0
 
 ### Content hashes and bodies
 
-`isValid()` rejects a malformed `content_hash` (it must be `<algorithm>-<unpadded base64url digest>`, or a non-empty list of them; `sha512` and `sha256` digests must have the right length) on Dialogs, attachments, analysis, `redacted_from` and `amended_from`. `getValidationWarnings()` notes a Dialog, analysis or inline attachment with a `url` but no `content_hash` (this will be an error in a later release), and a body under `encoding: "json"` that is a serialized JSON string rather than the JSON value. `contentHashProblems(value)` gives the reasons for one value.
+`isValid()` rejects a malformed `content_hash` (it must be `<algorithm>-<unpadded base64url digest>`, or a non-empty list of them; `sha512` and `sha256` digests must have the right length) on Dialogs, attachments, analysis, `redacted_from` and `amended_from`. A `url` without a `content_hash` is allowed on Dialogs, attachments and analysis (following the working group's direction on draft-ietf-vcon-vcon-core issue #40, since a producer cannot always obtain stable bytes for the URL); `redacted_from` and `amended_from` with a `url` still need one. An attachment needs `body`+`encoding` or `url`. `getValidationWarnings()` notes a body under `encoding: "json"` that is a serialized JSON string rather than the JSON value. `contentHashProblems(value)` gives the reasons for one value.
 
 ### Working with Tags
 
@@ -547,7 +547,7 @@ Attachment.VALID_ENCODINGS  // ['base64url', 'json', 'none']
 - `filename?: string`: Original filename
 - `body?: any`: Inline content
 - `encoding?: string`: Content encoding (`base64url`, `json`, `none`)
-- `url?: string`: External URL (requires `content_hash`)
+- `url?: string`: External URL (`content_hash` recommended, not required)
 - `content_hash?: string | string[]`: Content hash (`sha512-<base64url>`; single or array for multiple algorithms)
 
 #### Methods
