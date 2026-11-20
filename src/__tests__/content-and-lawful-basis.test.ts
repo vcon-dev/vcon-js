@@ -6,7 +6,7 @@ import { parsePyIsoformat, pyRepr } from '../util';
 
 /**
  * Rules added to the reference library in vcon 1.0.4: content_hash form,
- * url without content_hash, serialized JSON bodies, created_at kept as
+ * url without content_hash (allowed from vcon 1.0.6), serialized JSON bodies, created_at kept as
  * written, and the lawful basis body validator run by isValid().
  */
 
@@ -56,14 +56,36 @@ describe('content checks in isValid() and getValidationWarnings()', () => {
     expect(v.isValid().valid).toBe(true);
   });
 
-  it('warns about a Dialog url without content_hash', () => {
+  it('allows a Dialog url without content_hash, with no warning', () => {
     const v = withSession();
     v.data.dialog = [recording({ url: 'https://x/a.wav' })];
     v.data.sessions![0].dialog = [0];
-    expect(v.isValid().valid).toBe(true);
-    expect(v.getValidationWarnings()).toContain(
-      'Dialog at index 0 has a url but no content_hash (an external reference MUST have both; this will be an error in vcon 1.1).'
-    );
+    expect(v.isValid()).toEqual({ valid: true, errors: [] });
+    expect(v.getValidationWarnings().some(w => /content_hash/.test(w))).toBe(false);
+  });
+
+  it('allows an Attachment or Analysis url without content_hash', () => {
+    const v = withSession();
+    v.data.attachments = [{ purpose: 'doc', start: T, party: 0, session: 0, url: 'https://x' }];
+    v.data.analysis = [{ type: 'summary', vendor: 'v', sessions: 0, url: 'https://x' }];
+    expect(v.isValid()).toEqual({ valid: true, errors: [] });
+    expect(v.getValidationWarnings()).toEqual([]);
+  });
+
+  it('requires body+encoding or url on an Attachment', () => {
+    const v = withSession();
+    v.data.attachments = [{ purpose: 'doc', start: T, party: 0, session: 0, content_hash: H512 }];
+    expect(v.isValid().errors).toEqual(['Attachment at index 0 must include body+encoding or url.']);
+  });
+
+  it('still requires content_hash with a url on redacted_from and amended_from', () => {
+    const v = withSession();
+    v.data.redacted_from = { type: 'pii', url: 'https://x' };
+    expect(v.isValid().errors).toEqual(['redacted_from with url must include content_hash.']);
+    delete v.data.redacted_from;
+    v.data.amended_from = { url: 'https://x' };
+    expect(v.isValid().errors).toEqual(['amended_from with url must include content_hash.']);
+    expect(v.getValidationWarnings().some(w => /content_hash/.test(w))).toBe(false);
   });
 
   it('does not check an incomplete Dialog', () => {
@@ -73,7 +95,7 @@ describe('content checks in isValid() and getValidationWarnings()', () => {
     expect(v.getValidationWarnings().some(w => /content_hash|serialized/.test(w))).toBe(false);
   });
 
-  it('checks Attachment content_hash, and url only next to inline content', () => {
+  it('checks Attachment content_hash, and allows a url next to inline content', () => {
     const v = withSession();
     v.data.attachments = [
       { purpose: 'doc', start: T, party: 0, session: 0, url: 'https://x', content_hash: ['sha256-short'] },
@@ -82,9 +104,7 @@ describe('content checks in isValid() and getValidationWarnings()', () => {
     expect(v.isValid().errors).toEqual([
       "Attachment at index 0 has an invalid content_hash: 'sha256-short' has a sha256 digest of 5 base64url characters, expected 43."
     ]);
-    expect(v.getValidationWarnings()).toEqual([
-      'Attachment at index 1 has a url but no content_hash (an external reference MUST have both; this will be an error in vcon 1.1).'
-    ]);
+    expect(v.getValidationWarnings()).toEqual([]);
   });
 
   it('checks Analysis content and warns about a serialized JSON body', () => {

@@ -152,18 +152,15 @@ export class Attachment implements Partial<AttachmentType> {
       errors.push(`Invalid encoding: ${this.encoding}. Must be one of: ${Attachment.VALID_ENCODINGS.join(', ')}`);
     }
 
-    // External media MUST carry content_hash in spec-compliant format.
-    if (this.url !== undefined) {
-      if (this.content_hash === undefined) {
-        errors.push('Attachment with external url MUST include content_hash');
-      } else {
-        const hashes = Array.isArray(this.content_hash) ? this.content_hash : [this.content_hash];
-        const bad = hashes.filter(h => !isValidContentHash(h));
-        if (bad.length > 0) {
-          errors.push(
-            `Invalid content_hash format: ${bad.join(', ')}. Expected sha512-<base64url-of-SHA-512-digest>`
-          );
-        }
+    // A url without a content_hash is allowed (WG direction on core issue #40);
+    // a content_hash that is present MUST be well formed.
+    if (this.url !== undefined && this.content_hash !== undefined) {
+      const hashes = Array.isArray(this.content_hash) ? this.content_hash : [this.content_hash];
+      const bad = hashes.filter(h => !isValidContentHash(h));
+      if (bad.length > 0) {
+        errors.push(
+          `Invalid content_hash format: ${bad.join(', ')}. Expected sha512-<base64url-of-SHA-512-digest>`
+        );
       }
     }
 
